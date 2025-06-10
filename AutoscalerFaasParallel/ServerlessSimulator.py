@@ -1349,7 +1349,7 @@ def run_simulator_process(sim_id, shared_params, sim_type, shared_data, exp, the
                         opt = current_opt - gamma_n * grad
                     
                     
-                    theta_opt = round(min(max(opt[0]-(0/n**3), 1), maximum_concurrency),theta_round)
+                    theta_opt = round(min(max(opt[0], 1), maximum_concurrency),theta_round)
                     theta_min_opt = round(min(max(min(opt[1],opt[1]), 1), maximum_concurrency),theta_round)
                     gamma_exp_opt = round(max(opt[2],gamma_min),gamma_round) #max(opt[2], 0.01)
                     opt = np.array([theta_opt,theta_min_opt,gamma_exp_opt])
