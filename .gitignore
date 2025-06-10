@@ -1,0 +1,7 @@
+.venv
+zz**
+__pycache__
+*.pyc
+**/__pycache__
+simulation_*
+.DS_Store

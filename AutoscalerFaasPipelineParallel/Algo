@@ -1,0 +1,204 @@
+from AutoscalerFaas.utils import SystemState
+import numpy as np
+
+def exponential(lmbda):
+    return -np.log(np.random.rand()) / lmbda
+
+
+class AutoScalingAlgorithm:
+    def __init__(self, N, k_delta, k_gamma, T, theta_init, tau, K ):
+        self.N = N
+        self.k_delta = k_delta
+        self.k_gamma = k_gamma
+        self.T = T
+        self.theta = theta_init
+        self.state_elements_count = 5
+        self.state = []
+        self.weights = []
+        self.tau = tau
+        self.init_state()
+        self.init_weights()
+        self.n = 0
+        self.t = 0
+        self.K = K
+        self.costs = []
+        self.thetas = []
+        self.states = []
+        self.all_costs = []
+
+    def init_state(self):
+        
+        self.state = [0] * self.state_elements_count
+        self.state[SystemState.COLD] = self.N
+        self.state[SystemState.IDLE_ON] = 0
+        self.state[SystemState.INITIALIZING] = 0
+        self.state[SystemState.BUSY] = 0
+        self.state[SystemState.INIT_RESERVED] = 0 
+        
+    def init_weights(self):
+        
+        self.weights = [0] * self.state_elements_count
+        self.weights[SystemState.COLD] = 0
+        self.weights[SystemState.IDLE_ON] = 1.0
+        self.weights[SystemState.INITIALIZING] = 5.0
+        self.weights[SystemState.BUSY] = 1.0
+        self.weights[SystemState.INIT_RESERVED] = 500
+        self.w_rej = 1e3 
+
+    def set_weights(self, w_cold, w_idle_on, w_init_free, w_busy, w_reserved, w_rej):
+        self.weights[SystemState.COLD] = w_cold
+        self.weights[SystemState.IDLE_ON] = w_idle_on
+        self.weights[SystemState.INITIALIZING] = w_init_free
+        self.weights[SystemState.BUSY] = w_busy
+        self.weights[SystemState.INIT_RESERVED] = w_reserved
+        self.w_rej = w_rej
+    
+    def set_state(self, cold, idle_on, init_free, busy, init_reserved):
+        self.state[SystemState.COLD] = cold
+        self.state[SystemState.IDLE_ON] = idle_on
+        self.state[SystemState.INITIALIZING] = init_free
+        self.state[SystemState.BUSY] = busy
+        self.state[SystemState.INIT_RESERVED] = init_reserved
+        
+    def compute_cost(self, state=None):
+        if state is None:
+            raise Exception("State is not provided")
+        self.state = state
+        return np.dot(self.state, self.weights) + self.w_rej * (self.state[SystemState.BUSY] + self.state[SystemState.INIT_RESERVED] == self.N)
+    def run(self):
+        
+        gamma_n = self.k_gamma / (self.n ** 1.0)
+        delta_n = self.k_delta / (self.n ** (2.0 / 3.0))
+        tau_n = self.tau * (1 + np.log(self.n))
+        
+        costs = []
+        costs_avg_plus = 0
+        costs_avg_minus = 0
+        for k in range (self.K):
+            np.random.seed(self.n + k)
+            for step in range(tau_n):
+                theta_step = min(np.random.choice([np.floor(self.theta + delta_n), np.floor(self.theta + delta_n) + 1]), self.N)
+                self.simulate_step(theta_step=theta_step)
+                self.t += 1
+                costs.append(self.compute_cost())
+                costs_avg_plus += self.compute_cost()
+            for step in range(tau_n):
+                theta_step = max(np.random.choice([np.floor(self.theta - delta_n), np.floor(self.theta - delta_n) + 1]), 1)
+                self.simulate_step(theta_step=theta_step)
+                self.t += 1
+                costs.append(self.compute_cost())
+                costs_avg_minus += self.compute_cost()
+        costs_avg_plus /= self.K * tau_n
+        costs_avg_minus /= self.K * tau_n
+        self.theta = min(max(self.theta - gamma_n * (costs_avg_plus - costs_avg_minus) / (2.0 * delta_n), 1.0), self.N)
+        self.thetas.append(self.theta)
+        self.costs.append((costs_avg_plus + costs_avg_minus) / 2.0)
+        self.states.append(self.state.copy())
+        self.n += 1
+        
+        
+            
+        
+    def compute_theta(self):
+        return 0
+        
+    
+    
+        
+
+class AutoScalingKW:
+    def __init__(self, N, seed, T, lambda_per_N, theta_init, state_changes=None):
+        np.random.seed(seed)
+        self.N = N  # Number of servers
+        self.T = T  # Total simulation time
+        self.lambda_rate = lambda_per_N * N
+        self.theta = theta_init
+        self.state_changes = state_changes
+        self.mu = 1  # Service rate
+        self.beta = 0.1  # Initialization rate
+        self.gamma = 0.01  # Expiration rate
+        self.U = (self.lambda_rate + self.beta + self.mu + self.gamma) * N  # Uniformization constant
+        self.state = [N, 0, 0, 0, 0]  # [cold, idle-on, busy, initializing, blocked]
+        self.weights = [0, 1, 1.0, 5.0, 500.0]
+        self.w_rej = 1e3
+    
+    def simulate(self):
+        theta_prev = self.theta
+        n, t = 1, 0.0
+        K = 1 if self.lambda_rate == 0.15 else 2
+        D = 2 * 1e7
+        
+        while t <= self.T:
+            D_n = D * (1.0 + np.log(n))
+            J = int(D_n / K)
+            a_n = 10.0 / (n ** 1.0)
+            d_n = 1.0 / (n ** (2.0 / 3.0))
+            
+            cost_avg_vec = np.zeros(2 * K + 1)
+            
+            for k in range(1, 2 * K + 1):
+                np.random.seed(n + k)
+                theta_k = min(self.N, theta_prev + d_n) if k <= K else max(theta_prev - d_n, 1.0)
+                cost_avg = self.run_mc_simulation(J, theta_k)
+                cost_avg_vec[k] = cost_avg
+                t += J
+            
+            f_r = np.mean(cost_avg_vec[1:K + 1])
+            f_l = np.mean(cost_avg_vec[K + 1:])
+            self.theta = min(max(theta_prev - a_n * (f_r - f_l) / (2.0 * d_n), 1.0), self.N)
+            theta_prev = self.theta
+            
+            if n % 1000 == 0:
+                print(f"{(100.0 * min(t, self.T) / self.T):.0f}% - iteration: {n}, theta: {self.theta:.3f}, cost: {(f_l + f_r) / 2.0}")
+            
+            n += 1
+        print("Simulation finished.")
+    
+    def run_mc_simulation(self, J, theta_k):
+        cost_avg = 0.0
+        state = self.state.copy()
+        
+        for _ in range(J):
+            rnd = np.random.rand() * self.U
+            
+            if rnd <= self.lambda_rate * self.N:  # Job arrival
+                policy = max(min(int(np.floor(theta_k) - state[1] - (state[3] - state[4])), self.N - sum(state[1:4]) - 1), 0)
+                if state[1] > 0:
+                    state[1] -= 1
+                    state[2] += 1
+                else:
+                    if policy >= 0:
+                        state[0] -= (policy + 1)
+                        state[3] += (policy + 1)
+                        state[4] += 1
+            elif rnd <= (self.lambda_rate + self.beta) * self.N:  # Server initialization
+                if np.random.rand() * self.beta * self.N <= self.beta * state[3]:
+                    if state[4] > 0:
+                        state[2] += 1
+                        state[3] -= 1
+                        state[4] -= 1
+                    else:
+                        state[1] += 1
+                        state[3] -= 1
+            elif rnd <= (self.lambda_rate + self.beta + self.mu) * self.N:  # Server departure
+                if np.random.rand() * self.mu * self.N <= self.mu * state[2]:
+                    if state[4] > 0:
+                        state[4] -= 1
+                    else:
+                        state[1] += 1
+                        state[2] -= 1
+            else:  # Server expiration
+                if np.random.rand() * self.gamma * self.N <= self.gamma * state[1]:
+                    state[1] -= 1
+                    state[0] += 1
+            
+            cost = sum(state[i] * self.weights[i] for i in range(1, 5))
+            if state[2] + state[4] == self.N:
+                cost += self.w_rej
+            cost_avg += cost
+        
+        return cost_avg / J
+
+if __name__ == "__main__":
+    simulator = AutoScalingKW(N=50, seed=1, T=1000000000, lambda_per_N=0.15, theta_init=2)
+    simulator.simulate()
