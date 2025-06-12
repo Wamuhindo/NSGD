@@ -1,4 +1,4 @@
-from AutoscalerFaasF.utils import SystemState
+from AutoscalerFaas.utils import SystemState
 import numpy as np
 import time
 

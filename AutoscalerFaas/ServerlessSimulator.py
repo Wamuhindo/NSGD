@@ -3,10 +3,10 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/.."))
 
-from AutoscalerFaasF.SimProcess import ExpSimProcess, ConstSimProcess, ParetoSimProcess
-from AutoscalerFaasF.FunctionInstance import FunctionInstance
-from AutoscalerFaasF.utils import FunctionState, SystemState
-from AutoscalerFaasF.Algorithm import AutoScalingAlgorithm
+from AutoscalerFaas.SimProcess import ExpSimProcess, ConstSimProcess, ParetoSimProcess
+from AutoscalerFaas.FunctionInstance import FunctionInstance
+from AutoscalerFaas.utils import FunctionState, SystemState
+from AutoscalerFaas.Algorithm import AutoScalingAlgorithm
 import numpy as np
 from numpy.random import default_rng, SeedSequence
 import time
@@ -1208,12 +1208,12 @@ if __name__ == "__main__":
     
     for theta_init in opt_inits:
         for power_tau in power_taus:
-            K = 1
+            K = 2
             k_delta = 1
             #power_tau = 6
             tau =  10 ** power_tau
             k_gamma = np.array([1,1,1])#(1 * tau ) / 1e6
-            max_time =  4 * (10 ** (power_tau+2 ))
+            max_time =  4 * K * (10 ** (power_tau+2 ))
             current_time = time.strftime("%d_%m_%Y") #_%H_%M_%S
             log_dir = f"simulation_sequential_arr{arrival_rate}_{service_process_type}_{expiration_process_type}/zexperiment_{'_'.join(str(x) for x in theta_init)}_{power_tau}_{current_time}"
             max_concurrency = 50

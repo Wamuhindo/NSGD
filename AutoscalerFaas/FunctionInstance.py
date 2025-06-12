@@ -1,4 +1,4 @@
-from AutoscalerFaasF.utils import FunctionState
+from AutoscalerFaas.utils import FunctionState
 import numpy as np
 class FunctionInstance:
   id_counter = 0
