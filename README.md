@@ -1,6 +1,6 @@
 # PPO-LSTM for comparison with Non-Stochastic Gradient Descent for Serverless Computing
 
-This project implements an autoscaling framework based on reinforcement learning approach using Proximal Policy Optimization (PPO) with LSTM networks to compare with the proposed Non-Stochastic Gradient Descent (NSGD).
+This project implements an autoscaling framework based on reinforcement learning approach using Proximal Policy Optimization (PPO) with LSTM networks to compare with the proposed Non-Stationary Gradient Descent (NSGD).
 
 ## Overview
 
