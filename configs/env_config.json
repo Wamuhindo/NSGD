@@ -1,0 +1,132 @@
+{
+  "env_name": "Environment",
+  "min_time": 0,
+  "max_time": 1088,
+  "time_step": 1,
+  "log_dir": "logs",
+  "model_name": "PPO",
+  "env_params": {
+    "min_replicas": 1,
+    "max_concurency": 50,
+    "sampling_window": 200,
+    "stats_window": 10000,
+    "simulator_config": {},
+    "observation_config": {
+      "average_execution_time": {
+        "low": 0,
+        "high": 5
+      },
+      "throughput": {
+        "low": 0,
+        "high": 100
+      },
+      "requests": {
+        "low": 0,
+        "high": 1750
+      },
+      "replica": {
+        "low": 0,
+        "high": 50
+      },
+      "avg_cpu": {
+        "low": 0,
+        "high": 3.25
+      },
+      "avg_mem": {
+        "low": 0,
+        "high": 2
+      }
+    },
+    "actions_config": [
+      -2,
+      -1,
+      0,
+      1,
+      2
+    ],
+    "reward_config": {
+      "reward_type": "linear",
+      "reward_min": -2,
+      "reward_max": 10000,
+      "reward_params": {
+        "alpha": 0.75,
+        "beta": 0.125,
+        "gamma": 0.125,
+        "phi": 0.25
+      }
+    },
+    "function_config": {
+      "resources": {
+        "cpu": 150,
+        "mem": 256,
+        "gpu": 0,
+        "cpu_warm": [
+          50,
+          150
+        ],
+        "cpu_cold": [
+          200,
+          500
+        ],
+        "cpu_idle": [
+          5,
+          10
+        ],
+        "mem_warm": [
+          150,
+          256
+        ],
+        "mem_cold": [
+          200,
+          256
+        ],
+        "mem_idle": [
+          100,
+          200
+        ],
+        "gpu_warm": [
+          0,
+          0
+        ],
+        "gpu_cold": [
+          0,
+          0
+        ],
+        "gpu_idle": [
+          0,
+          0
+        ],
+        "gpu_warm_mem": [
+          0,
+          0
+        ],
+        "gpu_cold_mem": [
+          0,
+          0
+        ],
+        "gpu_idle_mem": [
+          0,
+          0
+        ]
+      },
+      "services": {
+        "warm_service_process": {
+          "type": "exp",
+          "mean": 1
+        },
+        "cold_start_process": {
+          "type": "exp",
+          "mean": 10
+        },
+        "expiration_process": {
+          "type": "exp",
+          "mean": 100
+        },
+        "arrival_process": {
+          "type": "exp",
+          "rate": 5
+        }
+      }
+    }
+  }
+}

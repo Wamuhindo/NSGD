@@ -1,0 +1,11 @@
+{
+    "algorithm": "PPO",
+    "env_config_file": "configs/env_config.json",
+    "ray_config_file": "configs/ray_config_ppo_lstm.json",
+    "logdir": "results/results_ppo_final_pareto_5",
+    "evaluation_interval": 5000,
+    "checkpoint_interval": 10,
+    "stopping_criteria": {
+      "max_iterations": 20
+    }
+  }
