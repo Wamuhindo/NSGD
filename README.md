@@ -1,6 +1,6 @@
 # SimFaaS-NSGD: A Serverless Simulator
 
-SimFaaS-NSGD is a serverless computing platform simulator designed for performance analysis and autoscaling algorithm evaluation. It implements Non-Stationary Gradient Descent (NSGD) algorithms for dynamic resource allocation in serverless environments.
+SimFaaS-NSGD is a serverless computing platform simulator designed for performance analysis and autoscaling algorithm evaluation. It implements Non-Stationary Stochastic Gradient Descent (NSGD) algorithms for dynamic resource allocation in serverless environments.
 
 ## Features
 
