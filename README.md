@@ -54,11 +54,12 @@ This project depends on the `RL4CC` (Reinforcement Learning for Cloud Computing)
 1. **Clone the repository with submodules:**
    ```bash
    git clone --recurse-submodules <repository-url>
-   cd PPO_LSTM_NSGD
+   git checkout ppo_lstm
    ```
 
    If you've already cloned without submodules:
    ```bash
+   git checkout ppo_lstm
    git submodule update --init --recursive
    ```
 
@@ -194,26 +195,3 @@ Enable verbose logging by modifying the Logger configuration in `main.py`:
 ```python
 error = Logger(stream=sys.stderr, verbose=2, is_error=True)
 ```
-
-## Research Context
-
-This implementation is based on research in:
-- Serverless computing auto-scaling
-- Reinforcement learning for cloud resource management
-- Natural gradient methods for policy optimization
-- LSTM networks for temporal decision making
-
-## License
-
-[Add appropriate license information]
-
-## Citation
-
-If you use this code in your research, please cite:
-```
-[Add citation information]
-```
-
-## Contact
-
-[Add contact information]
