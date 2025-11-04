@@ -1,0 +1,35 @@
+{
+
+
+    "arrival_rate":5,
+    "warm_service":{
+        "rate":1,
+        "type":"Exponential"
+    },
+    "cold_service":{
+        "rate":100,
+        "type":"Exponential"
+    },
+    "cold_start":{
+        "rate":0.1,
+        "type":"Exponential"
+    },
+    "expiration":{
+        "rate":0.1,
+        "type":"Exponential"
+    },
+    "optimization":{
+        "type":"adam",
+        "learning_rate":0.01
+    },
+    "theta":[[1,1,5]],
+    "tau":1e6,
+    "max_currency":50,
+    "max_time":1e8,
+    "log_dir":"logs/",
+    "exp_per_run":1,
+    "K":1
+
+
+
+}

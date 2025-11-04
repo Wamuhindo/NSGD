@@ -1202,7 +1202,7 @@ if __name__ == "__main__":
         ]
 
     opt_inits = [[1,1,5]]#[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    power_taus = [4]
+    power_taus = [3]
     K_exp = 1000
     gamma_min = 1
     
