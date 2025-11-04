@@ -28,7 +28,7 @@
     "max_time":1e8,
     "log_dir":"logs/",
     "exp_per_run":1,
-    "K":1
+    "K":2
 
 
 
