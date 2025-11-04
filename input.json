@@ -1,35 +1,73 @@
 {
+  "description": "Enhanced configuration file for Serverless Simulator experiments",
+  "experiment_name": "NSGD_baseline_experiment",
 
+  "arrival_rate": 5,
 
-    "arrival_rate":5,
-    "warm_service":{
-        "rate":1,
-        "type":"Exponential"
-    },
-    "cold_service":{
-        "rate":100,
-        "type":"Exponential"
-    },
-    "cold_start":{
-        "rate":0.1,
-        "type":"Exponential"
-    },
-    "expiration":{
-        "rate":0.1,
-        "type":"Exponential"
-    },
-    "optimization":{
-        "type":"adam",
-        "learning_rate":0.01
-    },
-    "theta":[[1,1,5]],
-    "tau":1e6,
-    "max_currency":50,
-    "max_time":1e8,
-    "log_dir":"logs/",
-    "exp_per_run":1,
-    "K":2
+  "warm_service": {
+    "rate": 1,
+    "type": "Exponential",
+    "comment": "Warm service time distribution (Exponential or Pareto)"
+  },
 
+  "cold_service": {
+    "rate": 100,
+    "type": "Exponential",
+    "comment": "Cold service time distribution"
+  },
 
+  "cold_start": {
+    "rate": 0.1,
+    "type": "Exponential",
+    "comment": "Cold start delay distribution"
+  },
 
+  "expiration": {
+    "rate": 0.1,
+    "type": "Exponential",
+    "comment": "Instance expiration time distribution (Exponential or Deterministic)"
+  },
+
+  "optimization": {
+    "type": "adam",
+    "learning_rate": 0.01,
+    "comment": "Optimization algorithm: adam, RMSprop, or SGD"
+  },
+
+  "theta": [[1, 1, 5]],
+  "tau": 1000,
+  "max_currency": 50,
+  "max_time": 100000,
+  "log_dir": "logs/",
+  "K": 2,
+
+  "seeds": [1, 42, 123, 456, 789],
+  "exp_per_run": 1,
+
+  "k_delta": 1,
+  "k_gamma": [1, 1, 1],
+  "K_exp": 1000,
+  "gamma_min": 1,
+  "exp_lr": [1, 1, 1],
+  "prtb": [
+    [-0.5, 0.5],
+    [-0.5, 0.5],
+    [-1, 1]
+  ],
+
+  "comments": {
+    "seeds": "List of random seeds for multiple runs. Each seed will produce one independent simulation run.",
+    "exp_per_run": "Number of experiments to run per seed (typically 1)",
+    "theta": "Initial theta values [theta, theta_min, gamma_exp]",
+    "tau": "Time horizon for optimization updates",
+    "K": "Number of parallel perturbations in NSGD (set to 2 for sequential runs)",
+    "max_time": "Maximum simulation time",
+    "max_currency": "Maximum number of concurrent function instances (max_concurrency)",
+    "k_delta": "Perturbation step size parameter",
+    "k_gamma": "Learning rate parameters for [theta, theta_min, gamma_exp]",
+    "K_exp": "Scaling factor for expiration rate",
+    "gamma_min": "Minimum allowed gamma (expiration) value",
+    "exp_lr": "Exponential learning rate decay parameters",
+    "prtb": "Perturbation ranges for each parameter"
+  }
 }

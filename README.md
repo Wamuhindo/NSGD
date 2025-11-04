@@ -1,91 +1,216 @@
-# SimFaaS-NSGD: A Serverless Simulator
+# NSGD: Non-Stationary Stochastic Gradient Descent for Serverless Autoscaling
 
-SimFaaS-NSGD is a serverless computing platform simulator designed for performance analysis and autoscaling algorithm evaluation. It implements Non-Stationary Stochastic Gradient Descent (NSGD) algorithms for dynamic resource allocation in serverless environments.
+[![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-## Features
+A high-performance serverless computing platform simulator implementing Non-Stationary Stochastic Gradient Descent (NSGD) algorithms for intelligent autoscaling and resource management.
 
-- **Serverless Function Simulation**: Simulates function instances with cold start, warm execution, and expiration behaviors
-- **Autoscaling Algorithms**: Implements NSGD-based autoscaling algorithms with adaptive parameter optimization
-- **Performance Analysis**: Comprehensive cost analysis and performance metrics collection
-- **Multiple Execution Modes**: Sequential and parallel simulation capabilities
-- **Configurable Workloads**: Support for different arrival patterns (exponential, constant, Pareto distributions)
+## Overview
 
-## Project Structure
+NSGD provides a comprehensive framework for simulating serverless function execution with advanced autoscaling capabilities. The simulator models realistic serverless behaviors including cold starts, warm execution, and instance expiration while optimizing resource allocation using NSGD-based algorithms.
 
-- `AutoscalerFaas/`: Sequential version of the serverless simulator
-- `AutoscalerFaasParallel/`: Parallel version supporting multiprocessing simulation
-- `costs/`: Cost analysis results from simulation runs
-- `plots/`: Generated visualization plots from simulation data
-- `plots_scripts/`: Python scripts for generating plots and analysis
+### Key Features
 
-## Requirements
+- **🚀 Intelligent Autoscaling**: NSGD-based optimization for dynamic resource allocation
+- **⚡ Multiple Execution Modes**: Sequential and parallel simulation support
+- **📊 Comprehensive Metrics**: Cold start probability, rejection rates, cost analysis, and more
+- **🔧 Flexible Configuration**: JSON-based configuration for reproducible experiments
+- **📈 Rich Analysis Tools**: Built-in plotting and statistical analysis capabilities
+- **🎯 Multi-Seed Support**: Run multiple independent experiments for statistical significance
+- **💾 Organized Output**: Hierarchical result structure with JSON, CSV, and text formats
 
-- Python 3.7+
-- NumPy >= 1.18.4
-- Matplotlib >= 3.2.1
-- Pandas >= 1.0.3
-- SciPy >= 1.4.1
-- tqdm >= 4.46.0
+## Table of Contents
+
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Project Structure](#project-structure)
+- [Usage](#usage)
+- [Output Files](#output-files)
+- [Examples](#examples)
+- [Contributing](#contributing)
+- [Citation](#citation)
+- [License](#license)
 
 ## Installation
 
-1. Create a Python virtual environment:
-```sh
-python -m venv env_name
+### Prerequisites
+
+- Python 3.7 or higher
+- pip package manager
+
+### Setup
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/yourusername/NSGD.git
+   cd NSGD
+   ```
+
+2. **Create a virtual environment** (recommended):
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Linux/macOS
+   # or
+   venv\Scripts\activate     # On Windows
+   ```
+
+3. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+### Requirements
+
+```
+numpy>=1.18.4
+matplotlib>=3.2.1
+pandas>=1.0.3
+scipy>=1.4.1
+tqdm>=4.46.0
 ```
 
-2. Activate the environment:
-```sh
-source env_name/bin/activate  # On Linux/macOS
-# or
-env_name\Scripts\activate     # On Windows
+## Quick Start
+
+### 1. Validate Installation (30 seconds)
+
+```bash
+python AutoscalerFaas/ServerlessSimulator.py --input input_test_tiny.json
 ```
 
-3. Install the required dependencies:
-```sh
-pip install -r requirements.txt
+### 2. Run a Full Experiment
+
+```bash
+python AutoscalerFaas/ServerlessSimulator.py --input input.json
+```
+
+### 3. Check Results
+
+```bash
+# View summary
+cat logs/experiment_*/theta_*/all_runs_summary.csv
+
+# Analyze with Python
+python -c "import pandas as pd; df = pd.read_csv('logs/experiment_*/theta_*/all_runs_summary.csv'); print(df.describe())"
+```
+
+## Project Structure
+
+```
+NSGD/
+├── AutoscalerFaas/              # Sequential simulator (recommended)
+│   ├── ServerlessSimulator.py   # Main simulator
+│   ├── Algorithm.py             # NSGD algorithms
+│   ├── FunctionInstance.py      # Instance lifecycle
+│   └── SimProcess.py            # Process generators
+├── AutoscalerFaasParallel/      # Parallel simulator
+├── plots_scripts/               # Analysis tools
+├── input.json                   # Production config
+├── input_example_quick.json     # Quick test
+├── input_test_tiny.json         # Validation
+├── QUICKSTART.md                # Quick guide
+├── SIMULATOR_USAGE.md           # Detailed docs
+└── requirements.txt             # Dependencies
 ```
 
 ## Usage
 
-### Sequential Simulation
+### Basic Usage
 
-Run the sequential version of the simulator:
-```sh
-python AutoscalerFaas/ServerlessSimulator.py
+```bash
+python AutoscalerFaas/ServerlessSimulator.py --input <config_file>
+
+# Get help
+python AutoscalerFaas/ServerlessSimulator.py --help
 ```
 
-### Parallel Simulation
+### Configuration Example
 
-Run the parallel version with multiprocessing support:
-```sh
-python AutoscalerFaasParallel/ServerlessSimulator.py
+```json
+{
+  "arrival_rate": 5,
+  "warm_service": {"rate": 1, "type": "Exponential"},
+  "cold_service": {"rate": 100, "type": "Exponential"},
+  "cold_start": {"rate": 0.1, "type": "Exponential"},
+  "expiration": {"rate": 0.1, "type": "Exponential"},
+  "optimization": {"type": "adam", "learning_rate": 0.01},
+  "theta": [[1, 1, 5]],
+  "tau": 1000,
+  "max_currency": 50,
+  "max_time": 100000,
+  "K": 2,
+  "seeds": [1, 42, 123, 456, 789],
+  "log_dir": "logs/"
+}
 ```
 
-### Generating Plots
+For detailed configuration options, see [SIMULATOR_USAGE.md](SIMULATOR_USAGE.md).
 
-Generate analysis plots using the plotting scripts:
-```sh
-cd plots_scripts
-python plots_comparison.py  # Compare different algorithms
-python cost_vs_arrival.py   # Cost vs arrival rate analysis
-python plots_sensitivity.py # Sensitivity analysis
+## Output Files
+
+```
+logs/
+└── experiment_arr5_Exponential_Exponential/
+    └── theta_1_1_5_TIMESTAMP/
+        ├── aggregated_results.json    # All runs combined
+        ├── all_runs_summary.csv       # Excel-ready
+        └── run_N_seed_S/              # Per-run results
+            ├── results.json
+            ├── theta.csv
+            └── all_costs.csv
 ```
 
-## Configuration
+## Examples
 
-The simulator supports various configuration parameters:
+### Quick Validation
+```bash
+python AutoscalerFaas/ServerlessSimulator.py --input input_test_tiny.json
+```
 
-- **Arrival Processes**: Exponential, Constant, or Pareto distributions
-- **Service Processes**: Configurable warm and cold service times
-- **Autoscaling Parameters**: NSGD learning rates, perturbation bounds, and optimization thresholds
-- **System Limits**: Maximum concurrency, expiration thresholds, and simulation duration
+### Multiple Seeds for Statistics
+```bash
+# Edit input.json: "seeds": [1, 42, 123, 456, 789]
+python AutoscalerFaas/ServerlessSimulator.py --input input.json
+```
 
-## Output
+### Analyze Results
+```python
+import pandas as pd
 
-The simulator generates:
+df = pd.read_csv('logs/.../all_runs_summary.csv')
+print(f"Mean cold start: {df['prob_cold'].mean():.4f}")
+print(f"Std deviation: {df['prob_cold'].std():.4f}")
+```
 
-- **Cost Files**: Detailed cost analysis results in the `costs/` directory
-- **Performance Metrics**: Response times, rejection rates, and resource utilization
-- **Visualization Plots**: Performance comparison charts in the `plots/` directory
+## Contributing
 
+Contributions welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
+
+## Citation
+
+```bibtex
+@software{nsgd_simulator,
+  title={SimFaas-NSGD: Simulator with Non-Stationary Stochastic Gradient Descent for Serverless Autoscaling},
+  author={Kambale, Abednego Wamuhindo and Anselmi, Jonatha and Ardagna, Danilo and Gaujal, Bruno},
+  year={2025},
+  url={https://github.com/Wamuhindo/NSGD}
+}
+```
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## Contact
+
+- **Issues**: [GitHub Issues](https://github.com/yourusername/NSGD/issues)
+- **Documentation**: See [SIMULATOR_USAGE.md](SIMULATOR_USAGE.md) and [QUICKSTART.md](QUICKSTART.md)
+
+---
+
+**⭐ If you find this project useful, please star it!**

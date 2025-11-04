@@ -105,16 +105,16 @@ class ServerlessSimulator:
             self.expiration_process = ConstSimProcess(theta_init[2]/K_exp , gen=exp_rng)
         else: 
             self.expiration_process = ExpSimProcess(theta_init[2]/K_exp , gen=exp_rng)
-        
+
 
         self.seed = kwargs.get('seed',1)
-        self.rang_plus = np.random.default_rng(seed)
-        self.rang_init= np.random.default_rng(seed)
-        self.rang_minus = np.random.default_rng(seed)
-        self.rang_delta_plus = np.random.default_rng(seed)
-        self.rang_delta_minus = np.random.default_rng(seed)
-        self.rang_delta_min_plus = np.random.default_rng(seed)
-        self.rang_delta_min_minus = np.random.default_rng(seed)
+        self.rang_plus = np.random.default_rng(self.seed)
+        self.rang_init= np.random.default_rng(self.seed)
+        self.rang_minus = np.random.default_rng(self.seed)
+        self.rang_delta_plus = np.random.default_rng(self.seed)
+        self.rang_delta_minus = np.random.default_rng(self.seed)
+        self.rang_delta_min_plus = np.random.default_rng(self.seed)
+        self.rang_delta_min_minus = np.random.default_rng(self.seed)
         
         self.autoscaler = AutoScalingAlgorithm(N=maximum_concurrency, k_delta=k_delta, k_gamma=k_gamma,theta_init=theta_init,tau=tau, K=K, T=T, log_dir=log_dir)
         self.autoscaler.set_params(**kwargs)
@@ -1173,78 +1173,367 @@ class ServerlessSimulator:
 
 
 
-if __name__ == "__main__":
-    seed =1
-    import time
+def load_config(config_path):
+    """Load configuration from JSON file.
 
-    random.seed(seed)
-    np.random.seed(seed)
+    Parameters
+    ----------
+    config_path : str
+        Path to the JSON configuration file
 
+    Returns
+    -------
+    dict
+        Configuration dictionary
+    """
+    import json
+    with open(config_path, 'r') as f:
+        config = json.load(f)
+    return config
+
+
+def parse_distribution_params(dist_config):
+    """Parse distribution configuration into rate parameter.
+
+    Parameters
+    ----------
+    dist_config : dict
+        Dictionary with 'rate' and 'type' keys
+
+    Returns
+    -------
+    float
+        Rate parameter for the distribution
+    """
+    return dist_config.get('rate')
+
+
+def run_single_experiment(config, seed, run_idx, total_runs, base_log_dir):
+    """Run a single simulation experiment with given parameters.
+
+    Parameters
+    ----------
+    config : dict
+        Configuration dictionary
+    seed : int
+        Random seed for this run
+    run_idx : int
+        Index of current run (0-based)
+    total_runs : int
+        Total number of runs
+    base_log_dir : str
+        Base directory for logging
+
+    Returns
+    -------
+    dict
+        Results dictionary including timing information
+    """
+    import json
+
+    # Setup initial system state
     running_function_count = 0
     idle_function_count = 0
     init_free_function_count = 0
     init_reserved_function_count = 0
     t = 0
-    arrival_rate = 5
-    warm_service_rate = 1
-    cold_service_rate = 1 #not used
-    cold_start_rate = 0.1
-    service_process_type = "Exponential"  # "Exponential" or "Pareto"
-    expiration_process_type = "Exponential"  # "Exponential" or "Deterministic"
-    optimization = "adam" # "adam", "RMSprop", "SGD"
-    
-    
-    exp_lr = np.array([1,1,1])   # l 0.8 ls 0.8 lss 0.81 
-    prtb = [
-            [-0.5, 0.5],   # for element 0
-            [-0.5, 0.5],   # for element 1
-            [-1, 1]    # for element 2
-        ]
 
-    opt_inits = [[1,1,5]]#[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    power_taus = [3]
-    K_exp = 1000
-    gamma_min = 1
-    
-    for theta_init in opt_inits:
-        for power_tau in power_taus:
-            K = 2
-            k_delta = 1
-            #power_tau = 6
-            tau =  10 ** power_tau
-            k_gamma = np.array([1,1,1])#(1 * tau ) / 1e6
-            max_time =  4 * K * (10 ** (power_tau+2 ))
-            current_time = time.strftime("%d_%m_%Y") #_%H_%M_%S
-            log_dir = f"simulation_sequential_arr{arrival_rate}_{service_process_type}_{expiration_process_type}/zexperiment_{'_'.join(str(x) for x in theta_init)}_{power_tau}_{current_time}"
-            max_concurrency = 50
+    # Extract parameters from config
+    arrival_rate = config['arrival_rate']
+    warm_service_rate = parse_distribution_params(config['warm_service'])
+    cold_service_rate = parse_distribution_params(config['cold_service'])
+    cold_start_rate = parse_distribution_params(config['cold_start'])
+    expiration_rate = parse_distribution_params(config['expiration'])
 
-            if not os.path.exists(log_dir):
-                os.makedirs(log_dir)
+    service_process_type = config['warm_service'].get('type', 'Exponential')
+    expiration_process_type = config['expiration'].get('type', 'Exponential')
 
-            algo_params = {
-            "k_gamma" : k_gamma,
-            "k_delta": k_delta,
-            "K":K,
-            "theta_init":theta_init,
-            "tau": tau,
-            "max_time":max_time,
-            "seed":seed,
-            'K_exp':K_exp,
-            'gamma_min':gamma_min,
-            'exp_lr':exp_lr,
-            'prtb':prtb,
-            }
-            
+    optimization = config['optimization'].get('type', 'adam')
+    learning_rate = config['optimization'].get('learning_rate', 0.01)
+
+    # Algorithm parameters
+    theta_init = config['theta'][0]  # First theta configuration
+    tau = config['tau']
+    max_concurrency = config['max_currency']
+    max_time = config['max_time']
+    K = config['K']
+
+    # Additional parameters with defaults
+    K_exp = config.get('K_exp', 1000)
+    gamma_min = config.get('gamma_min', 1)
+    exp_lr = np.array(config.get('exp_lr', [1, 1, 1]))
+    prtb = config.get('prtb', [[-0.5, 0.5], [-0.5, 0.5], [-1, 1]])
+
+    # Calculate derived parameters
+    k_delta = config.get('k_delta', 1)
+    k_gamma = np.array(config.get('k_gamma', [1, 1, 1]))
+
+    # Create run-specific log directory
+    current_time = time.strftime("%Y%m%d_%H%M%S")
+    run_log_dir = os.path.join(base_log_dir, f"run_{run_idx+1}_seed_{seed}")
+
+    if not os.path.exists(run_log_dir):
+        os.makedirs(run_log_dir)
+
+    # Setup algorithm parameters
+    algo_params = {
+        "k_gamma": k_gamma,
+        "k_delta": k_delta,
+        "K": K,
+        "theta_init": theta_init,
+        "tau": tau,
+        "max_time": max_time,
+        "seed": seed,
+        'K_exp': K_exp,
+        'gamma_min': gamma_min,
+        'exp_lr': exp_lr,
+        'prtb': prtb,
+    }
+
+    # Save run configuration (convert numpy arrays to lists for JSON serialization)
+    def convert_to_serializable(obj):
+        """Convert numpy arrays to lists for JSON serialization"""
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, dict):
+            return {k: convert_to_serializable(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [convert_to_serializable(item) for item in obj]
+        else:
+            return obj
+
+    run_config = {
+        'run_index': run_idx + 1,
+        'seed': seed,
+        'arrival_rate': arrival_rate,
+        'warm_service_rate': warm_service_rate,
+        'cold_service_rate': cold_service_rate,
+        'cold_start_rate': cold_start_rate,
+        'expiration_rate': expiration_rate,
+        'service_process_type': service_process_type,
+        'expiration_process_type': expiration_process_type,
+        'optimization': optimization,
+        'learning_rate': learning_rate,
+        'max_concurrency': max_concurrency,
+        'max_time': max_time,
+        'tau': tau,
+        'K': K,
+        'theta_init': theta_init,
+    }
+
+    # Add algo_params with conversion
+    run_config.update(convert_to_serializable(algo_params))
+
+    with open(os.path.join(run_log_dir, 'config.json'), 'w') as f:
+        json.dump(run_config, f, indent=2)
+
+    print(f"\n{'='*80}")
+    print(f"Starting Run {run_idx+1}/{total_runs} with seed={seed}")
+    print(f"Log directory: {run_log_dir}")
+    print(f"{'='*80}\n")
+
+    # Record start time
+    start_time = time.time()
+    start_perf = time.perf_counter()
+
+    # Initialize random seeds
+    random.seed(seed)
+    np.random.seed(seed)
+
+    # Create simulator
+    sim = ServerlessSimulator(
+        arrival_rate=arrival_rate,
+        warm_service_rate=warm_service_rate,
+        cold_service_rate=cold_service_rate,
+        cold_start_rate=cold_start_rate,
+        maximum_concurrency=max_concurrency,
+        log_dir=run_log_dir,
+        service_process_type=service_process_type,
+        expiration_process_type=expiration_process_type,
+        **algo_params
+    )
+
+    sim.optimization = optimization
+    sim.initialiaze_system(t, running_function_count, idle_function_count,
+                          init_free_function_count, init_reserved_function_count)
+
+    # Run simulation
+    sim.generate_trace(debug_print=False, progress=True)
+
+    # Record end time
+    end_time = time.time()
+    end_perf = time.perf_counter()
+
+    wall_clock_time = end_time - start_time
+    cpu_time = end_perf - start_perf
+
+    # Get results
+    results = sim.get_result_dict()
+    results['seed'] = seed
+    results['run_index'] = run_idx + 1
+    results['wall_clock_time_seconds'] = wall_clock_time
+    results['cpu_time_seconds'] = cpu_time
+    results['simulated_time'] = sim.get_trace_end()
+
+    # Print results
+    print(f"\nResults for Run {run_idx+1}:")
+    sim.print_trace_results()
+    print(f"\nExecution Time: {wall_clock_time:.2f} seconds ({wall_clock_time/60:.2f} minutes)")
+    print(f"CPU Time: {cpu_time:.2f} seconds")
+    print(f"Simulated Time: {results['simulated_time']:.2f}")
+
+    # Save results
+    with open(os.path.join(run_log_dir, 'results.json'), 'w') as f:
+        json.dump(results, f, indent=2)
+
+    # Save summary
+    with open(os.path.join(run_log_dir, 'summary.txt'), 'w') as f:
+        f.write(f"Run {run_idx+1} - Seed {seed}\n")
+        f.write(f"{'='*80}\n\n")
+        f.write(f"Execution Time: {wall_clock_time:.2f} seconds\n")
+        f.write(f"CPU Time: {cpu_time:.2f} seconds\n")
+        f.write(f"Simulated Time: {results['simulated_time']:.2f}\n\n")
+        f.write(json.dumps(results, indent=2))
+
+    return results
 
 
-            sim = ServerlessSimulator(arrival_rate=arrival_rate, warm_service_rate=warm_service_rate, cold_service_rate=cold_service_rate, cold_start_rate=cold_start_rate,
-                    maximum_concurrency = max_concurrency,log_dir=log_dir, service_process_type=service_process_type, expiration_process_type=expiration_process_type, **algo_params )
-            sim.optimization = optimization
-            sim.initialiaze_system(t,running_function_count, idle_function_count, init_free_function_count, init_reserved_function_count )
-            
-            sim.generate_trace(debug_print=False, progress=True)
-            sim.print_trace_results()
-            import json
-            with open(f'{log_dir}/summary.txt','a') as file:
-                file.write(json.dumps(sim.get_result_dict()))
+def run_experiments_from_config(config_path):
+    """Run multiple experiments from configuration file.
+
+    Parameters
+    ----------
+    config_path : str
+        Path to the JSON configuration file
+    """
+    import json
+
+    print(f"Loading configuration from: {config_path}")
+    config = load_config(config_path)
+
+    # Get experiment parameters
+    seeds = config.get('seeds', [1])  # Default to single seed
+    exp_per_run = config.get('exp_per_run', 1)
+
+    # Create base log directory
+    current_time = time.strftime("%Y%m%d_%H%M%S")
+    arrival_rate = config['arrival_rate']
+    service_type = config['warm_service'].get('type', 'Exponential')
+    expiration_type = config['expiration'].get('type', 'Exponential')
+    theta_str = '_'.join(str(x) for x in config['theta'][0])
+
+    base_log_dir = config.get('log_dir', 'logs/')
+    base_log_dir = os.path.join(
+        base_log_dir,
+        f"experiment_arr{arrival_rate}_{service_type}_{expiration_type}",
+        f"theta_{theta_str}_{current_time}"
+    )
+
+    if not os.path.exists(base_log_dir):
+        os.makedirs(base_log_dir)
+
+    print(f"Base log directory: {base_log_dir}")
+
+    # Save master configuration
+    with open(os.path.join(base_log_dir, 'experiment_config.json'), 'w') as f:
+        json.dump(config, f, indent=2)
+
+    # Run experiments for each seed
+    all_results = []
+    total_runs = len(seeds) * exp_per_run
+
+    experiment_start = time.time()
+
+    for exp_idx in range(exp_per_run):
+        for seed_idx, seed in enumerate(seeds):
+            run_idx = exp_idx * len(seeds) + seed_idx
+
+            try:
+                results = run_single_experiment(
+                    config, seed, run_idx, total_runs, base_log_dir
+                )
+                all_results.append(results)
+            except Exception as e:
+                print(f"\nError in run {run_idx+1} with seed {seed}: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
+
+    experiment_end = time.time()
+    total_experiment_time = experiment_end - experiment_start
+
+    # Aggregate results
+    print(f"\n{'='*80}")
+    print("EXPERIMENT SUMMARY")
+    print(f"{'='*80}\n")
+    print(f"Total runs completed: {len(all_results)}/{total_runs}")
+    print(f"Total experiment time: {total_experiment_time:.2f} seconds ({total_experiment_time/60:.2f} minutes)")
+
+    # Save aggregated results
+    aggregated_results = {
+        'total_runs': len(all_results),
+        'total_experiment_time_seconds': total_experiment_time,
+        'config': config,
+        'runs': all_results
+    }
+
+    with open(os.path.join(base_log_dir, 'aggregated_results.json'), 'w') as f:
+        json.dump(aggregated_results, f, indent=2)
+
+    # Create summary CSV
+    if all_results:
+        df = pd.DataFrame(all_results)
+        df.to_csv(os.path.join(base_log_dir, 'all_runs_summary.csv'), index=False)
+        print(f"\nSummary CSV saved to: {os.path.join(base_log_dir, 'all_runs_summary.csv')}")
+
+    # Print statistics
+    if all_results:
+        print(f"\nStatistics across {len(all_results)} runs:")
+        print(f"  Mean cold start probability: {np.mean([r['prob_cold'] for r in all_results]):.4f} ± {np.std([r['prob_cold'] for r in all_results]):.4f}")
+        print(f"  Mean rejection probability: {np.mean([r['prob_reject'] for r in all_results]):.4f} ± {np.std([r['prob_reject'] for r in all_results]):.4f}")
+        print(f"  Mean execution time: {np.mean([r['wall_clock_time_seconds'] for r in all_results]):.2f} ± {np.std([r['wall_clock_time_seconds'] for r in all_results]):.2f} seconds")
+
+    print(f"\nAll results saved to: {base_log_dir}")
+    print(f"{'='*80}\n")
+
+
+if __name__ == "__main__":
+    import argparse
+    import json
+
+    parser = argparse.ArgumentParser(
+        description='Serverless Computing Platform Simulator with NSGD Optimization',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Run simulation with default input.json
+  python ServerlessSimulator.py --input input.json
+
+  # Run simulation with custom configuration
+  python ServerlessSimulator.py --input my_config.json
+        """
+    )
+
+    parser.add_argument(
+        '--input',
+        type=str,
+        required=True,
+        help='Path to input JSON configuration file'
+    )
+
+    args = parser.parse_args()
+
+    # Check if input file exists
+    if not os.path.exists(args.input):
+        print(f"Error: Input file '{args.input}' not found!")
+        sys.exit(1)
+
+    # Run experiments
+    try:
+        run_experiments_from_config(args.input)
+    except Exception as e:
+        print(f"\nFatal error: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
     

@@ -5,3 +5,4 @@ __pycache__
 **/__pycache__
 simulation_*
 .DS_Store
+logs/
