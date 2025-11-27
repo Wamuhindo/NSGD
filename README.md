@@ -15,7 +15,6 @@ NSGD provides a comprehensive framework for simulating serverless function execu
 - **⚡ Multiple Execution Modes**: Sequential and parallel simulation support
 - **📊 Comprehensive Metrics**: Cold start probability, rejection rates, cost analysis, and more
 - **🔧 Flexible Configuration**: JSON-based configuration for reproducible experiments
-- **📈 Rich Analysis Tools**: Built-in plotting and statistical analysis capabilities
 - **🎯 Multi-Seed Support**: Run multiple independent experiments for statistical significance
 - **💾 Organized Output**: Hierarchical result structure with JSON, CSV, and text formats
 
