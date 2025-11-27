@@ -4,7 +4,8 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 A serverless computing platform simulator implementing Non-Stationary Stochastic Gradient Descent (NSGD) algorithms for intelligent autoscaling and resource management.
-This simulator was used for the experiment in the paper : **Autoscaling in Serverless Platforms via Online Learning with Convergence Guarantees**
+This simulator was used for the experiment in the paper : **Autoscaling in Serverless Platforms via Online Learning with Convergence Guarantees**.
+It is based on the SimFaas simulator provided [here](https://github.com/pacslab/simfaas).
 
 ## Overview
 
