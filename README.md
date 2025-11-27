@@ -3,7 +3,8 @@
 [![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-A high-performance serverless computing platform simulator implementing Non-Stationary Stochastic Gradient Descent (NSGD) algorithms for intelligent autoscaling and resource management.
+A serverless computing platform simulator implementing Non-Stationary Stochastic Gradient Descent (NSGD) algorithms for intelligent autoscaling and resource management.
+This simulator was used for the experiment in the paper : **Autoscaling in Serverless Platforms via Online Learning with Convergence Guarantees**
 
 ## Overview
 
