@@ -13,12 +13,12 @@ NSGD provides a comprehensive framework for simulating serverless function execu
 
 ### Key Features
 
-- **🚀 Intelligent Autoscaling**: NSGD-based optimization for dynamic resource allocation
-- **⚡ Multiple Execution Modes**: Sequential and parallel simulation support
-- **📊 Comprehensive Metrics**: Cold start probability, rejection rates, cost analysis, and more
-- **🔧 Flexible Configuration**: JSON-based configuration for reproducible experiments
-- **🎯 Multi-Seed Support**: Run multiple independent experiments for statistical significance
-- **💾 Organized Output**: Hierarchical result structure with JSON, CSV, and text formats
+- ** Intelligent Autoscaling**: NSGD-based optimization for dynamic resource allocation
+- ** Multiple Execution Modes**: Sequential and parallel simulation support
+- ** Comprehensive Metrics**: Cold start probability, rejection rates, cost analysis, and more
+- ** Flexible Configuration**: JSON-based configuration for reproducible experiments
+- ** Multi-Seed Support**: Run multiple independent experiments for statistical significance
+- ** Organized Output**: Hierarchical result structure with JSON, CSV, and text formats
 
 ## Table of Contents
 
