@@ -1,0 +1,47 @@
+{
+  "description": "Quick vectorial NSGD test. Small T for fast iteration.",
+  "experiment_name": "vectorial_quick",
+
+  "arrival_rate": 7.5,
+
+  "warm_service": {
+    "rate": 1,
+    "type": "Exponential"
+  },
+
+  "cold_service": {
+    "rate": 100,
+    "type": "Exponential"
+  },
+
+  "cold_start": {
+    "rate": 0.1,
+    "type": "Exponential"
+  },
+
+  "expiration": {
+    "rate": 0.01,
+    "type": "Exponential"
+  },
+
+  "optimization": {
+    "type": "sgd"
+  },
+
+  "theta": [[1, 1, 5]],
+  "tau": 10000,
+  "max_concurrency": 50,
+  "max_time": 500000,
+  "log_dir": "logs/",
+  "K": 2,
+
+  "seeds": [1],
+
+  "k_delta": 1,
+  "k_gamma": [1, 1, 1],
+  "prtb": [[-0.5, 0.5], [-0.5, 0.5], [-1, 1]],
+  "learn_mask": [true, true, true],
+  "accumulate_cost": true,
+  "K_exp": 1000,
+  "gamma_min": 1
+}

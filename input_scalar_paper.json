@@ -1,0 +1,42 @@
+{
+  "description": "Scalar NSKW from paper 2502.01284v2, Section VI-A. N=50, lambda/N=0.15 (lambda=7.5), mu=1, beta=0.1, gamma=0.01",
+  "experiment_name": "scalar_paper",
+
+  "arrival_rate": 7.5,
+
+  "warm_service": {
+    "rate": 1,
+    "type": "Exponential"
+  },
+
+  "cold_service": {
+    "rate": 100,
+    "type": "Exponential"
+  },
+
+  "cold_start": {
+    "rate": 0.1,
+    "type": "Exponential"
+  },
+
+  "expiration": {
+    "rate": 0.01,
+    "type": "Exponential"
+  },
+
+  "optimization": {
+    "type": "RMSprop"
+  },
+
+  "theta_inits": [1, 3, 5, 10],
+  "theta_init": 1,
+  "tau": 100000,
+  "max_concurrency": 50,
+  "max_time": 10000000,
+  "log_dir": "logs/",
+  "K": 2,
+  "seeds": [1000],
+
+  "k_delta": 1,
+  "k_gamma": 1
+}

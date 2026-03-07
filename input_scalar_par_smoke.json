@@ -1,0 +1,41 @@
+{
+  "description": "Smoke test for parallel scalar NSKW. Short max_time for quick validation.",
+  "experiment_name": "scalar_par_smoke",
+
+  "arrival_rate": 7.5,
+
+  "warm_service": {
+    "rate": 1,
+    "type": "Exponential"
+  },
+
+  "cold_service": {
+    "rate": 100,
+    "type": "Exponential"
+  },
+
+  "cold_start": {
+    "rate": 0.1,
+    "type": "Exponential"
+  },
+
+  "expiration": {
+    "rate": 0.01,
+    "type": "Exponential"
+  },
+
+  "optimization": {
+    "type": "SGD"
+  },
+
+  "theta_inits": [1],
+  "tau": 1000,
+  "max_concurrency": 50,
+  "max_time": 10000,
+  "log_dir": "logs/",
+  "K": 2,
+  "seeds": [42],
+
+  "k_delta": 1,
+  "k_gamma": 1
+}

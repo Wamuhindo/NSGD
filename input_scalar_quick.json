@@ -1,0 +1,43 @@
+{
+  "description": "Quick test for scalar NSKW - reduced tau and T for fast testing",
+  "experiment_name": "scalar_quick",
+
+  "arrival_rate": 7.5,
+
+  "warm_service": {
+    "rate": 1,
+    "type": "Exponential"
+  },
+
+  "cold_service": {
+    "rate": 100,
+    "type": "Exponential"
+  },
+
+  "cold_start": {
+    "rate": 0.1,
+    "type": "Exponential"
+  },
+
+  "expiration": {
+    "rate": 0.01,
+    "type": "Exponential"
+  },
+
+  "optimization": {
+    "type": "sgd"
+  },
+
+  "theta_inits": [1, 5, 10],
+  "theta_init": 1,
+  "tau": 1000,
+  "max_concurrency": 50,
+  "max_time": 50000,
+  "log_dir": "logs/",
+  "K": 2,
+
+  "seeds": [1],
+
+  "k_delta": 1,
+  "k_gamma": 10
+}
