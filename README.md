@@ -66,6 +66,8 @@ NSGD/
 ├── AutoscalerFaasScalarVectorial/       # Sequential, 3 parameters (SPSA)
 │   ├── Algorithm.py                     # SPSA: Rademacher perturbations, per-component gamma
 │   ├── ServerlessSimulator.py           # Policy 1: theta_stock, theta_idle, theta_exp
+│   ├── api_algorithm.py                 # SPSA decoupled from simulator (for Flask API)
+│   ├── flask_app.py                     # Flask REST API for real-system integration
 │   ├── FunctionInstance.py
 │   ├── SimProcess.py
 │   └── utils.py
@@ -84,6 +86,7 @@ NSGD/
 │   ├── SimProcess.py
 │   └── utils.py
 │
+├── algo_config.json                     # Example config for Flask API (real deployment)
 ├── input_scalar_paper.json              # Scalar config matching paper Section VI-A
 ├── input_scalar_quick.json              # Scalar quick test (reduced tau, T)
 ├── input_scalar_par_smoke.json          # Scalar parallel smoke test
@@ -117,6 +120,7 @@ scipy>=1.4.1
 pandas>=1.0.3
 tqdm>=4.46.0
 matplotlib>=3.2.1
+flask>=2.0.0        # only needed for the REST API
 ```
 
 ## Usage
@@ -162,6 +166,110 @@ python3 -m AutoscalerFaasScalarVectorialPar.ServerlessSimulator --input input_ve
 # Full run
 python3 -m AutoscalerFaasScalarVectorialPar.ServerlessSimulator --input input_vectorial_paper.json
 ```
+
+## Flask API (Real-System Integration)
+
+The vectorial SPSA algorithm can run as a REST API for integration with a real Kubernetes/OpenFaaS platform. Instead of running a simulator, the algorithm receives system state observations via HTTP and returns scaling parameters (`theta`).
+
+### Setup
+
+```bash
+pip install flask
+python -m AutoscalerFaasScalarVectorial.flask_app --config algo_config.json
+```
+
+To restore from a previously saved snapshot:
+
+```bash
+python -m AutoscalerFaasScalarVectorial.flask_app --config algo_config.json --restore logs/api/autosave.json
+```
+
+Options: `--host` (default `0.0.0.0`), `--port` (default `5000`), `--debug`.
+
+### API Endpoints
+
+**POST /event** -- Report a system state observation and advance the algorithm.
+
+```json
+// Request
+{
+  "state": [40, 3, 5, 1, 1],
+  "has_rejected_job": false,
+  "timestamp": 1709000000.0
+}
+// Response
+{
+  "theta": [1.0, 1.0, 5.0],
+  "theta_step": [1, 1, 5],
+  "iteration": 1,
+  "phase": "plus",
+  "step_in_phase": 1,
+  "phase_budget": 466,
+  "cost": 12.0
+}
+```
+
+The `state` array has 5 elements: `[cold, idle_on, busy, initializing, init_reserved]`. The response includes the current `theta_step` (stochastically rounded, ready for scaling decisions) and phase progress.
+
+**GET /theta** -- Get the current scaling parameters without advancing the algorithm.
+
+**GET /status** -- Full algorithm introspection (iteration, phase, theta history, cost history, sequences).
+
+**POST /snapshot** -- Save algorithm state to disk. Optionally include replay data for simulator replay.
+
+```json
+// Request (optional)
+{ "path": "/custom/path.json", "include_replay_data": true }
+```
+
+**POST /force-update** -- Force a gradient update with accumulated costs so far. Useful when real-system traffic is low and phases take too long to complete naturally.
+
+**POST /config** -- Update weights, optimizer, or learn_mask at runtime without restart.
+
+```json
+{ "weights": {"w_idle_on": 3}, "optimization": "adam", "learn_mask": [true, true, false] }
+```
+
+**POST /reset** -- Reset the algorithm to its initial state (keeping config).
+
+**GET /health** -- Health check.
+
+### API Configuration (`algo_config.json`)
+
+The API uses the same SPSA hyperparameters as the simulator, but `tau` should be much smaller (e.g. 50-500) for real deployments with limited event throughput.
+
+```json
+{
+  "max_concurrency": 50,
+  "theta_init": [1, 1, 5],
+  "k_delta": 1,
+  "k_gamma": [1, 1, 1],
+  "tau": 100,
+  "K": 2,
+  "optimization": "adam",
+  "seed": 1,
+  "K_exp": 1000,
+  "gamma_min": 1,
+  "prtb": [[-0.5, 0.5], [-0.5, 0.5], [-1, 1]],
+  "learn_mask": [true, true, true],
+  "accumulate_cost": true,
+  "weights": { "w_cold": 0, "w_idle_on": 2, "w_busy": 1, "w_init": 5, "w_reserved": 100, "w_rej": 200 },
+  "log_dir": "logs/api",
+  "persistence": { "auto_save_interval": 100, "auto_save_path": "logs/api/autosave.json" }
+}
+```
+
+The `persistence` block enables automatic state saving every N events for crash recovery.
+
+### Logging
+
+The API writes JSONL log files under `log_dir`:
+- `events.jsonl` -- every state observation with cost and phase info
+- `gradient_updates.jsonl` -- each gradient update with costs, gradient, and new theta
+
+### State Persistence and Replay
+
+Snapshots saved via `/snapshot` (or auto-save) include the full algorithm state and RNG states, allowing exact recovery after restart. When `include_replay_data` is set, a companion file with all observed states and costs is saved for offline simulator replay using `FunctionInstance.py`.
 
 ## Configuration Reference
 

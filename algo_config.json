@@ -1,0 +1,36 @@
+{
+  "description": "Configuration for the Flask SPSA autoscaler API. tau should be set much smaller than in simulation (e.g. 50-500) for real deployments with limited event throughput.",
+
+  "max_concurrency": 50,
+  "theta_init": [1, 1, 5],
+
+  "k_delta": 1,
+  "k_gamma": [1, 1, 1],
+  "tau": 100,
+  "K": 2,
+
+  "optimization": "adam",
+  "seed": 1,
+
+  "K_exp": 1000,
+  "gamma_min": 1,
+  "prtb": [[-0.5, 0.5], [-0.5, 0.5], [-1, 1]],
+  "learn_mask": [true, true, true],
+  "accumulate_cost": true,
+
+  "weights": {
+    "w_cold": 0,
+    "w_idle_on": 2,
+    "w_busy": 1,
+    "w_init": 5,
+    "w_reserved": 100,
+    "w_rej": 200
+  },
+
+  "log_dir": "logs/api",
+
+  "persistence": {
+    "auto_save_interval": 100,
+    "auto_save_path": "logs/api/autosave.json"
+  }
+}
