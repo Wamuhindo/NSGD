@@ -1,5 +1,5 @@
 {
-  "description": "Configuration for the Flask SPSA autoscaler API. tau should be set much smaller than in simulation (e.g. 50-500) for real deployments with limited event throughput.",
+  "description": "Configuration for the Flask SPSA autoscaler API. Choose tau based on how many observations your system needs per phase to reach approximate stationarity.",
 
   "max_concurrency": 50,
   "theta_init": [1, 1, 5],

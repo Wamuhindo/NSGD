@@ -236,7 +236,7 @@ The `state` array has 5 elements: `[cold, idle_on, busy, initializing, init_rese
 
 ### API Configuration (`algo_config.json`)
 
-The API uses the same SPSA hyperparameters as the simulator, but `tau` should be much smaller (e.g. 50-500) for real deployments with limited event throughput.
+The API uses the same SPSA hyperparameters as the simulator. The `tau` parameter controls the base observation window (`tau_n = tau * ln(n+1)` events per phase). In simulation, events are generated instantly, so large values like `tau=100000` are practical. In a real system, each event is an actual function invocation or state change, so the total phase duration depends on your system's event rate. Choose `tau` based on how many observations your system needs to reach approximate stationarity under a given theta — this depends on the arrival rate, service times, and mixing time of your platform. Too small means noisy gradient estimates; too large means slow adaptation.
 
 ```json
 {
