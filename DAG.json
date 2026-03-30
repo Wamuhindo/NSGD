@@ -1,0 +1,35 @@
+{"DirectedAcyclicGraph": {
+        "C1": {
+            "next": [
+                "C2", "C3"
+            ],
+            "transition_probability": [
+                0.6, 0.4
+            ]
+        },
+        "C2": {
+            "next": [
+                "C4", "C3"
+            ],
+            "transition_probability": [
+                0.4, 0.6
+            ]
+        },
+        "C3": {
+            "next": [
+                "C5"
+            ],
+            "transition_probability": [
+                1
+            ]
+        },
+        "C4": {
+            "next": [
+                "C5", "C3"
+            ],
+            "transition_probability": [
+                0.8, 0.2
+            ]
+        }
+    }
+}

@@ -10,6 +10,7 @@ Key differences from the scalar version:
   - Scale-up on warm starts: if #idle-on < pi_theta_idle, spawn up to pi_theta_stock
 """
 
+import json
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/.."))
@@ -909,22 +910,56 @@ def run_single_experiment(config, seed, run_idx, total_runs, base_log_dir):
 
     return results
 
+def load_dag_graph(dag_path, log_path=None):
+    """Load the DAG graph from a JSON file."""
+    with open(dag_path, 'r') as f:
+        our_graph = json.load(f)
+    dag = our_graph["DirectedAcyclicGraph"]
+    import networkx as nx
+    import matplotlib.pyplot as plt
+    G = nx.DiGraph()
+    for node, props in dag.items():
+        for idx, next_node in enumerate(props["next"]):
+            prob = props["transition_probability"][idx]
+            G.add_edge(node, next_node, weight=prob)
+    # Save the DAG plot
+    pos = nx.spring_layout(G)
+    nx.draw(G, pos, with_labels=True, node_color='lightblue', node_size=2000, font_size=10)
+    edge_labels = nx.get_edge_attributes(G, 'weight')
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+    plt.savefig(f"{log_path}/dag_graph.png", bbox_inches='tight')
+    plt.close()
 
-def run_experiments_from_config(config_path):
+    # Topological sort: parents before children
+    node_order = list(nx.topological_sort(G))
+
+    # Build Markovian transition matrix
+    n = len(node_order)
+    node_idx = {node: i for i, node in enumerate(node_order)}
+    import numpy as np
+    matrix = np.zeros((n, n))
+    for node, props in dag.items():
+        i = node_idx[node]
+        for idx, next_node in enumerate(props["next"]):
+            j = node_idx[next_node]
+            matrix[i, j] = props["transition_probability"][idx]
+    
+    print(node_order)
+    print(matrix)
+
+    return node_order, np.array(matrix)
+    
+
+def run_experiments_from_config(config_path, dag_path=None):
     """Run multiple experiments from a JSON configuration file."""
     import json
-
     print(f"Loading configuration from: {config_path}")
     config = load_config(config_path)
-
-    seeds = config.get('seeds', [1])
-    theta_list = config['theta']
-
-    # Create base log directory
-    current_time = time.strftime("%Y%m%d_%H%M%S")
-    arrival_rate = config['arrival_rate']
+    
     experiment_name = config.get('experiment_name', 'vectorial')
     base_log_dir = config.get('log_dir', 'logs/')
+    arrival_rate = config["arrival_rate"]
+    current_time = time.strftime("%Y%m%d_%H%M%S")
     base_log_dir = os.path.join(base_log_dir, f"{experiment_name}_arr{arrival_rate}_{current_time}")
 
     if not os.path.exists(base_log_dir):
@@ -932,6 +967,29 @@ def run_experiments_from_config(config_path):
 
     with open(os.path.join(base_log_dir, 'experiment_config.json'), 'w') as f:
         json.dump(config, f, indent=2)
+
+
+    
+    print("Loadin Dag graph from : {dag_path}")
+    if dag_path is not None:
+        tp_sort, matrix = load_dag_graph(dag_path, log_path=base_log_dir)
+
+    seeds = config.get('seeds', [1])
+    theta_list = config['theta']
+
+    # Create base log directory
+    
+    arrival_rate = config['nodes'][tp_sort[0]]['arrival_rate']
+    arrival_rates = np.array([arrival_rate])
+    for i in range(1, len(tp_sort)):
+        arrival_rates = np.append(arrival_rates, np.sum([arrival_rates[j] * matrix[j, i] for j in range(i)]))
+    print(arrival_rates)
+    config['arrival_rates'] = arrival_rates  # Update config with final node's arrival rate for logging  
+    config["tp_sort"] = tp_sort
+    config["transition_matrix"] = matrix
+
+        
+    
 
     all_results = []
     exp_per_run = config.get('exp_per_run', 1)
@@ -992,14 +1050,19 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Vectorial NSGD Serverless Simulator (Autoscaling.pdf)')
     parser.add_argument('--input', type=str, required=True, help='Path to input JSON configuration file')
+    parser.add_argument('--dag', type=str, required=True, help='Path to input JSON DAG file')
     args = parser.parse_args()
 
     if not os.path.exists(args.input):
         print(f"Error: Input file '{args.input}' not found!")
         sys.exit(1)
 
+    if not os.path.exists(args.dag):
+        print(f"Error: DAG file '{args.dag}' not found!")
+        sys.exit(1)
+
     try:
-        run_experiments_from_config(args.input)
+        run_experiments_from_config(args.input, args.dag)
     except Exception as e:
         print(f"\nFatal error: {e}")
         import traceback
