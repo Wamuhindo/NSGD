@@ -814,39 +814,44 @@ def convert_to_serializable(obj):
         return [convert_to_serializable(item) for item in obj]
     return obj
 
-
-def run_single_experiment(config, seed, run_idx, total_runs, base_log_dir):
-    """Run a single vectorial NSGD experiment."""
+def run_single_experiment(config, seed, run_idx, total_runs, base_log_dir,
+                          node_name=None, node_config=None, computed_arrival_rate=None):
+    """
+    Run a single vectorial NSGD experiment.
+    If node_config is provided, per-node params override global ones.
+    computed_arrival_rate overrides arrival_rate from config/node_config.
+    """
     import json
 
-    # Extract system parameters
-    arrival_rate = config['arrival_rate']
-    warm_service_rate = config['warm_service']['rate']
-    cold_service_rate = config['cold_service']['rate']
-    cold_start_rate = config['cold_start']['rate']
+    nc = node_config if node_config is not None else config
 
-    service_process_type = config['warm_service'].get('type', 'Exponential')
-    expiration_process_type = config['expiration'].get('type', 'Exponential')
-    optimization = config['optimization'].get('type', 'sgd')
+    # Extract system parameters (node-level overrides global)
+    arrival_rate        = computed_arrival_rate if computed_arrival_rate is not None else nc.get('arrival_rate', config['arrival_rate'])
+    warm_service_rate   = nc['warm_service']['rate']
+    cold_service_rate   = nc['cold_service']['rate']
+    cold_start_rate     = nc['cold_start']['rate']
+    service_process_type    = nc['warm_service'].get('type', 'Exponential')
+    expiration_process_type = nc.get('expiration', {}).get('type', 'Exponential')
+    optimization        = config['optimization'].get('type', 'sgd')
+    max_concurrency     = nc.get('max_concurrency', config['max_concurrency'])
 
-    # Algorithm parameters
-    theta_init = config['theta'][0]  # first theta configuration
-    tau = config['tau']
-    max_concurrency = config['max_concurrency']
-    max_time = config['max_time']
-    K = config['K']
-    K_exp = config.get('K_exp', 1000)
-    gamma_min = config.get('gamma_min', 1)
-    k_delta = config.get('k_delta', 1)
-    k_gamma = np.array(config.get('k_gamma', [1, 1, 1]))
-    prtb = config.get('prtb', [[-0.5, 0.5], [-0.5, 0.5], [-1, 1]])
-    learn_mask = config.get('learn_mask', [True, True, True])
+    # Algorithm parameters (always global)
+    theta_init      = config['theta'][0]
+    tau             = config['tau']
+    max_time        = config['max_time']
+    K               = config['K']
+    K_exp           = config.get('K_exp', 1000)
+    gamma_min       = config.get('gamma_min', 1)
+    k_delta         = config.get('k_delta', 1)
+    k_gamma         = np.array(config.get('k_gamma', [1, 1, 1]))
+    prtb            = config.get('prtb', [[-0.5, 0.5], [-0.5, 0.5], [-1, 1]])
+    learn_mask      = config.get('learn_mask', [True, True, True])
     accumulate_cost = config.get('accumulate_cost', True)
 
-    # Create run-specific log directory
-    run_log_dir = os.path.join(base_log_dir, f"run_{run_idx + 1}_seed_{seed}")
-    if not os.path.exists(run_log_dir):
-        os.makedirs(run_log_dir)
+    # Create run-specific log directory (node-namespaced to avoid collisions)
+    node_prefix = f"node_{node_name}_" if node_name else ""
+    run_log_dir = os.path.join(base_log_dir, f"{node_prefix}run_{run_idx + 1}_seed_{seed}")
+    os.makedirs(run_log_dir, exist_ok=True)
 
     algo_params = {
         "k_gamma": k_gamma, "k_delta": k_delta, "K": K,
@@ -856,9 +861,10 @@ def run_single_experiment(config, seed, run_idx, total_runs, base_log_dir):
         "accumulate_cost": accumulate_cost,
     }
 
-    # Save run config (uses module-level convert_to_serializable)
+    # Save run config
     run_config = {
         'run_index': run_idx + 1, 'seed': seed,
+        'node_name': node_name,
         'arrival_rate': arrival_rate, 'optimization': optimization,
         'max_concurrency': max_concurrency, 'theta_init': theta_init,
     }
@@ -866,8 +872,10 @@ def run_single_experiment(config, seed, run_idx, total_runs, base_log_dir):
     with open(os.path.join(run_log_dir, 'config.json'), 'w') as f:
         json.dump(run_config, f, indent=2)
 
+    node_label = f" | node={node_name}" if node_name else ""
     print(f"\n{'=' * 80}")
-    print(f"Starting Run {run_idx + 1}/{total_runs} with seed={seed}, theta_init={theta_init}")
+    print(f"Starting Run {run_idx + 1}/{total_runs} | seed={seed} | theta_init={theta_init}{node_label}")
+    print(f"arrival_rate={arrival_rate:.4f} | max_concurrency={max_concurrency}")
     print(f"Log directory: {run_log_dir}")
     print(f"{'=' * 80}\n")
 
@@ -895,20 +903,117 @@ def run_single_experiment(config, seed, run_idx, total_runs, base_log_dir):
     wall_clock_time = end_time - start_time
 
     results = sim.get_result_dict()
-    results['seed'] = seed
-    results['run_index'] = run_idx + 1
+    results['seed']                    = seed
+    results['run_index']               = run_idx + 1
+    results['node_name']               = node_name
     results['wall_clock_time_seconds'] = wall_clock_time
-    results['simulated_time'] = sim.get_trace_end()
-    results['theta_init'] = list(theta_init) if not isinstance(theta_init, list) else theta_init
+    results['simulated_time']          = sim.get_trace_end()
+    results['theta_init']              = list(theta_init) if not isinstance(theta_init, list) else theta_init
+    results['arrival_rate']            = arrival_rate
 
-    print(f"\nResults for Run {run_idx + 1}:")
+    print(f"\nResults for Run {run_idx + 1}{node_label}:")
     sim.print_trace_results()
-    print(f"Execution Time: {wall_clock_time:.2f} seconds ({wall_clock_time / 60:.2f} minutes)")
+    print(f"Execution Time: {wall_clock_time:.2f}s ({wall_clock_time / 60:.2f}min)")
 
     with open(os.path.join(run_log_dir, 'results.json'), 'w') as f:
         json.dump(results, f, indent=2)
 
     return results
+    
+# def run_single_experiment(config, seed, run_idx, total_runs, base_log_dir):
+#     """Run a single vectorial NSGD experiment."""
+#     import json
+
+#     # Extract system parameters
+#     arrival_rate = config['arrival_rate']
+#     warm_service_rate = config['warm_service']['rate']
+#     cold_service_rate = config['cold_service']['rate']
+#     cold_start_rate = config['cold_start']['rate']
+
+#     service_process_type = config['warm_service'].get('type', 'Exponential')
+#     expiration_process_type = config['expiration'].get('type', 'Exponential')
+#     optimization = config['optimization'].get('type', 'sgd')
+
+#     # Algorithm parameters
+#     theta_init = config['theta'][0]  # first theta configuration
+#     tau = config['tau']
+#     max_concurrency = config['max_concurrency']
+#     max_time = config['max_time']
+#     K = config['K']
+#     K_exp = config.get('K_exp', 1000)
+#     gamma_min = config.get('gamma_min', 1)
+#     k_delta = config.get('k_delta', 1)
+#     k_gamma = np.array(config.get('k_gamma', [1, 1, 1]))
+#     prtb = config.get('prtb', [[-0.5, 0.5], [-0.5, 0.5], [-1, 1]])
+#     learn_mask = config.get('learn_mask', [True, True, True])
+#     accumulate_cost = config.get('accumulate_cost', True)
+
+#     # Create run-specific log directory
+#     run_log_dir = os.path.join(base_log_dir, f"run_{run_idx + 1}_seed_{seed}")
+#     if not os.path.exists(run_log_dir):
+#         os.makedirs(run_log_dir)
+
+#     algo_params = {
+#         "k_gamma": k_gamma, "k_delta": k_delta, "K": K,
+#         "theta_init": theta_init, "tau": tau, "max_time": max_time,
+#         "seed": seed, "K_exp": K_exp, "gamma_min": gamma_min,
+#         "prtb": prtb, "learn_mask": learn_mask,
+#         "accumulate_cost": accumulate_cost,
+#     }
+
+#     # Save run config (uses module-level convert_to_serializable)
+#     run_config = {
+#         'run_index': run_idx + 1, 'seed': seed,
+#         'arrival_rate': arrival_rate, 'optimization': optimization,
+#         'max_concurrency': max_concurrency, 'theta_init': theta_init,
+#     }
+#     run_config.update(convert_to_serializable(algo_params))
+#     with open(os.path.join(run_log_dir, 'config.json'), 'w') as f:
+#         json.dump(run_config, f, indent=2)
+
+#     print(f"\n{'=' * 80}")
+#     print(f"Starting Run {run_idx + 1}/{total_runs} with seed={seed}, theta_init={theta_init}")
+#     print(f"Log directory: {run_log_dir}")
+#     print(f"{'=' * 80}\n")
+
+#     start_time = time.time()
+#     random.seed(seed)
+#     np.random.seed(seed)
+
+#     sim = ServerlessSimulator(
+#         arrival_rate=arrival_rate,
+#         warm_service_rate=warm_service_rate,
+#         cold_service_rate=cold_service_rate,
+#         cold_start_rate=cold_start_rate,
+#         maximum_concurrency=max_concurrency,
+#         log_dir=run_log_dir,
+#         service_process_type=service_process_type,
+#         expiration_process_type=expiration_process_type,
+#         **algo_params
+#     )
+
+#     sim.optimization = optimization
+#     sim.initialiaze_system(0, 0, 0, 0, 0)
+#     sim.generate_trace(debug_print=False, progress=True)
+
+#     end_time = time.time()
+#     wall_clock_time = end_time - start_time
+
+#     results = sim.get_result_dict()
+#     results['seed'] = seed
+#     results['run_index'] = run_idx + 1
+#     results['wall_clock_time_seconds'] = wall_clock_time
+#     results['simulated_time'] = sim.get_trace_end()
+#     results['theta_init'] = list(theta_init) if not isinstance(theta_init, list) else theta_init
+
+#     print(f"\nResults for Run {run_idx + 1}:")
+#     sim.print_trace_results()
+#     print(f"Execution Time: {wall_clock_time:.2f} seconds ({wall_clock_time / 60:.2f} minutes)")
+
+#     with open(os.path.join(run_log_dir, 'results.json'), 'w') as f:
+#         json.dump(results, f, indent=2)
+
+#     return results
 
 def load_dag_graph(dag_path, log_path=None):
     """Load the DAG graph from a JSON file."""
@@ -948,7 +1053,32 @@ def load_dag_graph(dag_path, log_path=None):
     print(matrix)
 
     return node_order, np.array(matrix)
-    
+
+def _aggregate_graph_results(graph_results, tp_sort):
+    """
+    Combine per-node results into graph-level stats.
+    Cold start prob is request-weighted across nodes.
+    """
+    total_reqs   = sum(r['reqs_total']  for r in graph_results.values())
+    total_cold   = sum(r['reqs_cold']   for r in graph_results.values())
+    total_reject = sum(r['reqs_reject'] for r in graph_results.values())
+    total_warm   = sum(r['reqs_warm']   for r in graph_results.values())
+
+    agg = {
+        'graph_reqs_total':   total_reqs,
+        'graph_reqs_cold':    total_cold,
+        'graph_reqs_warm':    total_warm,
+        'graph_reqs_reject':  total_reject,
+        'graph_prob_cold':    total_cold   / total_reqs if total_reqs > 0 else 0,
+        'graph_prob_reject':  total_reject / total_reqs if total_reqs > 0 else 0,
+        # Weighted averages by total reqs per node
+        'graph_inst_count_avg': sum(
+            r['inst_count_avg'] * r['reqs_total'] for r in graph_results.values()
+        ) / total_reqs if total_reqs > 0 else 0,
+        'per_node': graph_results,
+        'node_order': tp_sort,
+    }
+    return agg
 
 def run_experiments_from_config(config_path, dag_path=None):
     """Run multiple experiments from a JSON configuration file."""
@@ -987,62 +1117,129 @@ def run_experiments_from_config(config_path, dag_path=None):
     config['arrival_rates'] = arrival_rates  # Update config with final node's arrival rate for logging  
     config["tp_sort"] = tp_sort
     config["transition_matrix"] = matrix
-
-        
+    print(config["arrival_rates"])
+    print(config["tp_sort"])
+    print(config["transition_matrix"])
+    print(f"Experiment will run with the following seeds: {seeds}")
+    #TODO
+    # we need to adapt the code to run graph like application 
+    # we have calculated the whole arrival rates for each node in the graph, we can use that to run the simulation for each node and then combine the results to get the final  results for the whole graph. 
+    # the important part is when calculating cost function we need to consider the cost of all nodes in the graph.
     
-
+    
     all_results = []
-    exp_per_run = config.get('exp_per_run', 1)
-    total_runs = len(theta_list) * len(seeds) * exp_per_run
-    experiment_start = time.time()
+    node_results_by_run = {}   # run_idx -> {node_name -> result}
 
-    # Per-theta k_gamma override: k_gamma_per_theta[i] applies to theta[i]
+    exp_per_run = config.get('exp_per_run', 1)
+    total_runs = len(theta_list) * len(seeds) * exp_per_run * len(tp_sort)
+    experiment_start = time.time()
     k_gamma_per_theta = config.get('k_gamma_per_theta', None)
 
     run_idx = 0
     for ti, theta_init in enumerate(theta_list):
         theta_config = dict(config)
         theta_config['theta'] = [theta_init]
-
-        # Override k_gamma if per-theta values are provided
         if k_gamma_per_theta is not None and ti < len(k_gamma_per_theta):
             theta_config['k_gamma'] = k_gamma_per_theta[ti]
 
         theta_str = '_'.join(str(x) for x in theta_init)
         theta_log_dir = os.path.join(base_log_dir, f"theta_{theta_str}")
-        if not os.path.exists(theta_log_dir):
-            os.makedirs(theta_log_dir)
+        os.makedirs(theta_log_dir, exist_ok=True)
 
         for _ in range(exp_per_run):
             for seed in seeds:
-                try:
-                    results = run_single_experiment(theta_config, seed, run_idx, total_runs, theta_log_dir)
-                    results['theta_init'] = theta_init
-                    all_results.append(results)
-                except Exception as e:
-                    print(f"\nError in run {run_idx + 1} with seed {seed}, theta {theta_init}: {e}")
-                    import traceback
-                    traceback.print_exc()
+                graph_results = {}   # node_name -> result dict for this (theta, seed) run
+
+                for node_idx, node_name in enumerate(tp_sort):
+                    node_config = config['nodes'][node_name]
+                    computed_arr = float(arrival_rates[node_idx])
+
+                    node_log_dir = os.path.join(theta_log_dir, f"node_{node_name}")
+                    os.makedirs(node_log_dir, exist_ok=True)
+
+                    try:
+                        result = run_single_experiment(
+                            theta_config, seed, run_idx, total_runs, node_log_dir,
+                            node_name=node_name,
+                            node_config=node_config,
+                            computed_arrival_rate=computed_arr
+                        )
+                        result['node_name'] = node_name
+                        result['computed_arrival_rate'] = computed_arr
+                        graph_results[node_name] = result
+                    except Exception as e:
+                        print(f"Error in node {node_name}, run {run_idx+1}, seed {seed}: {e}")
+                        import traceback; traceback.print_exc()
+
+                # --- Aggregate across nodes for this (theta, seed) run ---
+                if graph_results:
+                    agg = _aggregate_graph_results(graph_results, tp_sort)
+                    agg['theta_init'] = theta_init
+                    agg['seed'] = seed
+                    agg['run_index'] = run_idx + 1
+                    all_results.append(agg)
+
+                    agg_path = os.path.join(theta_log_dir, f"graph_results_seed{seed}.json")
+                    with open(agg_path, 'w') as f:
+                        json.dump(agg, f, indent=2)
+
                 run_idx += 1
 
-    experiment_end = time.time()
-    total_experiment_time = experiment_end - experiment_start
+        
+    
 
-    print(f"\n{'=' * 80}")
-    print("EXPERIMENT SUMMARY")
-    print(f"{'=' * 80}")
-    print(f"Total runs completed: {len(all_results)}/{total_runs}")
-    print(f"Total time: {total_experiment_time:.2f}s ({total_experiment_time / 60:.2f}min)")
+    # all_results = []
+    # exp_per_run = config.get('exp_per_run', 1)
+    # total_runs = len(theta_list) * len(seeds) * exp_per_run
+    # experiment_start = time.time()
 
-    aggregated = {'total_runs': len(all_results), 'time_seconds': total_experiment_time, 'runs': all_results}
-    with open(os.path.join(base_log_dir, 'aggregated_results.json'), 'w') as f:
-        json.dump(aggregated, f, indent=2)
+    # # Per-theta k_gamma override: k_gamma_per_theta[i] applies to theta[i]
+    # k_gamma_per_theta = config.get('k_gamma_per_theta', None)
 
-    if all_results:
-        df = pd.DataFrame(all_results)
-        df.to_csv(os.path.join(base_log_dir, 'all_runs_summary.csv'), index=False)
+    # run_idx = 0
+    # for ti, theta_init in enumerate(theta_list):
+    #     theta_config = dict(config)
+    #     theta_config['theta'] = [theta_init]
 
-    print(f"\nAll results saved to: {base_log_dir}")
+    #     # Override k_gamma if per-theta values are provided
+    #     if k_gamma_per_theta is not None and ti < len(k_gamma_per_theta):
+    #         theta_config['k_gamma'] = k_gamma_per_theta[ti]
+
+    #     theta_str = '_'.join(str(x) for x in theta_init)
+    #     theta_log_dir = os.path.join(base_log_dir, f"theta_{theta_str}")
+    #     if not os.path.exists(theta_log_dir):
+    #         os.makedirs(theta_log_dir)
+
+    #     for _ in range(exp_per_run):
+    #         for seed in seeds:
+    #             try:
+    #                 results = run_single_experiment(theta_config, seed, run_idx, total_runs, theta_log_dir)
+    #                 results['theta_init'] = theta_init
+    #                 all_results.append(results)
+    #             except Exception as e:
+    #                 print(f"\nError in run {run_idx + 1} with seed {seed}, theta {theta_init}: {e}")
+    #                 import traceback
+    #                 traceback.print_exc()
+    #             run_idx += 1
+
+    # experiment_end = time.time()
+    # total_experiment_time = experiment_end - experiment_start
+
+    # print(f"\n{'=' * 80}")
+    # print("EXPERIMENT SUMMARY")
+    # print(f"{'=' * 80}")
+    # print(f"Total runs completed: {len(all_results)}/{total_runs}")
+    # print(f"Total time: {total_experiment_time:.2f}s ({total_experiment_time / 60:.2f}min)")
+
+    # aggregated = {'total_runs': len(all_results), 'time_seconds': total_experiment_time, 'runs': all_results}
+    # with open(os.path.join(base_log_dir, 'aggregated_results.json'), 'w') as f:
+    #     json.dump(aggregated, f, indent=2)
+
+    # if all_results:
+    #     df = pd.DataFrame(all_results)
+    #     df.to_csv(os.path.join(base_log_dir, 'all_runs_summary.csv'), index=False)
+
+    # print(f"\nAll results saved to: {base_log_dir}")
 
 
 if __name__ == "__main__":
