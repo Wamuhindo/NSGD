@@ -176,11 +176,11 @@ class VectorialAutoScalingAlgorithm:
         """
         self.weights = [0] * self.state_elements_count
         self.weights[SystemState.COLD.value] = 0
-        self.weights[SystemState.IDLE_ON.value] = 2
+        self.weights[SystemState.IDLE_ON.value] = 1
         self.weights[SystemState.BUSY.value] = 1.0
         self.weights[SystemState.INITIALIZING.value] = 5.0
-        self.weights[SystemState.INIT_RESERVED.value] = 100
-        self.w_rej = 200
+        self.weights[SystemState.INIT_RESERVED.value] = 50
+        self.w_rej = 100
 
     # ------------------------------------------------------------------
     # Getters / setters

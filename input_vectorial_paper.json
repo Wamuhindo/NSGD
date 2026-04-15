@@ -2,7 +2,7 @@
   "description": "Vectorial NSGD from Autoscaling.pdf, Section VI-A. N=50, lambda/N=0.15, mu=1, beta=0.1, gamma=0.01. tau=10^4, T=4*10^6.",
   "experiment_name": "vectorial_paper",
 
-  "arrival_rate": 7.5,
+  "arrival_rate": 5,
 
   "warm_service": {
     "rate": 1,
@@ -34,7 +34,7 @@
     [3, 4, 10],
     [10, 2, 1]
   ],
-  "tau": 100000,
+  "tau": 10000,
   "max_concurrency": 50,
   "max_time": 4000000,
   "log_dir": "logs/",
