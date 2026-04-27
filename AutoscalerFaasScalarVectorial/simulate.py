@@ -1343,9 +1343,16 @@ def run_graph_experiment(config, node_order, transition_matrix, seed, run_idx,
     results['run_index'] = run_idx + 1
     results['theta_init'] = theta_init
     results['wall_clock_time_seconds'] = wall_clock_time
+    results['run_log_dir'] = run_log_dir
 
     with open(os.path.join(run_log_dir, 'results.json'), 'w') as f:
         json.dump(convert_to_serializable(results), f, indent=2)
+    write_graph_metrics_csv(
+        os.path.join(run_log_dir, 'metrics.csv'),
+        results,
+        config,
+        node_order,
+    )
 
     print(f"\nResults for Graph Run {run_idx + 1}:")
     print(f"External arrivals: {results['external_arrivals']}")
@@ -1521,6 +1528,150 @@ def _aggregate_graph_results(graph_results, tp_sort):
     }
     return agg
 
+
+def _rate_to_mean_time(rate):
+    return 1.0 / rate if rate and rate > 0 else np.inf
+
+
+def _node_distribution_summary(node_config):
+    warm_rate = node_config['warm_service']['rate']
+    cold_rate = node_config['cold_service']['rate']
+    cold_start_rate = node_config['cold_start']['rate']
+    expiration_rate = node_config.get('expiration', {}).get('rate')
+    return {
+        'warm_service_rate': warm_rate,
+        'warm_service_mean_time': _rate_to_mean_time(warm_rate),
+        'cold_service_rate': cold_rate,
+        'cold_service_mean_time': _rate_to_mean_time(cold_rate),
+        'cold_start_rate': cold_start_rate,
+        'cold_start_mean_time': _rate_to_mean_time(cold_start_rate),
+        'expiration_rate': expiration_rate,
+        'expiration_mean_time': _rate_to_mean_time(expiration_rate),
+    }
+
+
+def _weighted_rate(per_node, node_configs, node_order, key):
+    total_reqs = sum(per_node[node]['reqs_total'] for node in node_order)
+    if total_reqs <= 0:
+        return 0
+    return sum(
+        node_configs[node][key]['rate'] * per_node[node]['reqs_total']
+        for node in node_order
+    ) / total_reqs
+
+
+def _sum_node_metric(per_node, node_order, key):
+    return sum(per_node[node].get(key, 0) for node in node_order)
+
+
+def _build_graph_metrics_rows(results, config, node_order):
+    per_node = results['per_node']
+    node_configs = config['nodes']
+    rows = []
+
+    graph_warm_rate = _weighted_rate(per_node, node_configs, node_order, 'warm_service')
+    graph_cold_rate = _weighted_rate(per_node, node_configs, node_order, 'cold_service')
+    graph_cold_start_rate = _weighted_rate(per_node, node_configs, node_order, 'cold_start')
+    graph_expiration_rate = _weighted_rate(per_node, node_configs, node_order, 'expiration')
+
+    graph_row = {
+        'level': 'graph',
+        'node': 'ALL',
+        'node_index': '',
+        'reqs_total': results['graph_reqs_total'],
+        'reqs_cold': results['graph_reqs_cold'],
+        'reqs_warm': results['graph_reqs_warm'],
+        'reqs_init_free': _sum_node_metric(per_node, node_order, 'reqs_init_free'),
+        'reqs_init_reserved': _sum_node_metric(per_node, node_order, 'reqs_init_reserved'),
+        'reqs_queued': _sum_node_metric(per_node, node_order, 'reqs_queued'),
+        'reqs_reject': results['graph_reqs_reject'],
+        'prob_cold': results['graph_prob_cold'],
+        'prob_reject': results['graph_prob_reject'],
+        'prob_warm': results['graph_reqs_warm'] / results['graph_reqs_total'] if results['graph_reqs_total'] > 0 else 0,
+        'prob_queued': (
+            _sum_node_metric(per_node, node_order, 'reqs_queued') / results['graph_reqs_total']
+            if results['graph_reqs_total'] > 0 else 0
+        ),
+        'inst_count_avg': _sum_node_metric(per_node, node_order, 'inst_count_avg'),
+        'inst_running_count_avg': _sum_node_metric(per_node, node_order, 'inst_running_count_avg'),
+        'inst_idle_count_avg': _sum_node_metric(per_node, node_order, 'inst_idle_count_avg'),
+        'inst_init_free_count_avg': _sum_node_metric(per_node, node_order, 'inst_init_free_count_avg'),
+        'inst_init_reserved_count_avg': _sum_node_metric(per_node, node_order, 'inst_init_reserved_count_avg'),
+        'inst_queued_jobs_count_avg': _sum_node_metric(per_node, node_order, 'inst_queued_jobs_count_avg'),
+        'external_arrivals': results['external_arrivals'],
+        'internal_arrivals': results['internal_arrivals'],
+        'graph_event_avg_cost': results['graph_cost_avg'],
+        'graph_time_avg_cost': results['graph_time_avg_cost'],
+        'simulated_time': results['simulated_time'],
+        'warm_service_rate': graph_warm_rate,
+        'warm_service_mean_time': _rate_to_mean_time(graph_warm_rate),
+        'cold_service_rate': graph_cold_rate,
+        'cold_service_mean_time': _rate_to_mean_time(graph_cold_rate),
+        'cold_start_rate': graph_cold_start_rate,
+        'cold_start_mean_time': _rate_to_mean_time(graph_cold_start_rate),
+        'expiration_rate': graph_expiration_rate,
+        'expiration_mean_time': _rate_to_mean_time(graph_expiration_rate),
+        'total_expected_warm_service_time': sum(
+            _rate_to_mean_time(node_configs[node]['warm_service']['rate']) for node in node_order
+        ),
+        'total_expected_cold_service_time': sum(
+            _rate_to_mean_time(node_configs[node]['cold_service']['rate']) for node in node_order
+        ),
+        'total_expected_cold_start_time': sum(
+            _rate_to_mean_time(node_configs[node]['cold_start']['rate']) for node in node_order
+        ),
+        'total_expected_expiration_time': sum(
+            _rate_to_mean_time(node_configs[node]['expiration']['rate']) for node in node_order
+        ),
+    }
+    rows.append(graph_row)
+
+    for node_index, node_name in enumerate(node_order, start=1):
+        node_result = per_node[node_name]
+        row = {
+            'level': 'node',
+            'node': node_name,
+            'node_index': node_index,
+            'reqs_total': node_result['reqs_total'],
+            'reqs_cold': node_result['reqs_cold'],
+            'reqs_warm': node_result['reqs_warm'],
+            'reqs_init_free': node_result['reqs_init_free'],
+            'reqs_init_reserved': node_result['reqs_init_reserved'],
+            'reqs_queued': node_result['reqs_queued'],
+            'reqs_reject': node_result['reqs_reject'],
+            'prob_cold': node_result['prob_cold'],
+            'prob_reject': node_result['prob_reject'],
+            'prob_warm': node_result['reqs_warm'] / node_result['reqs_total'] if node_result['reqs_total'] > 0 else 0,
+            'prob_queued': node_result['reqs_queued'] / node_result['reqs_total'] if node_result['reqs_total'] > 0 else 0,
+            'inst_count_avg': node_result['inst_count_avg'],
+            'inst_running_count_avg': node_result['inst_running_count_avg'],
+            'inst_idle_count_avg': node_result['inst_idle_count_avg'],
+            'inst_init_free_count_avg': node_result['inst_init_free_count_avg'],
+            'inst_init_reserved_count_avg': node_result['inst_init_reserved_count_avg'],
+            'inst_queued_jobs_count_avg': node_result['inst_queued_jobs_count_avg'],
+            'external_arrivals': '',
+            'internal_arrivals': '',
+            'graph_event_avg_cost': '',
+            'graph_time_avg_cost': '',
+            'simulated_time': results['simulated_time'],
+            'total_expected_warm_service_time': '',
+            'total_expected_cold_service_time': '',
+            'total_expected_cold_start_time': '',
+            'total_expected_expiration_time': '',
+        }
+        row.update(_node_distribution_summary(node_configs[node_name]))
+        rows.append(row)
+
+    return rows
+
+
+def write_graph_metrics_csv(path, results, config, node_order):
+    rows = _build_graph_metrics_rows(results, config, node_order)
+    df = pd.DataFrame(convert_to_serializable(rows))
+    df.to_csv(path, index=False)
+    return rows
+
+
 def run_experiments_from_config(config_path, dag_path=None):
     """Run multiple experiments from a JSON configuration file."""
     import json
@@ -1620,6 +1771,18 @@ def run_experiments_from_config(config_path, dag_path=None):
             flat_results.append(convert_to_serializable(row))
         df = pd.DataFrame(flat_results)
         df.to_csv(os.path.join(base_log_dir, 'all_runs_summary.csv'), index=False)
+
+        metric_frames = []
+        for result in all_results:
+            metrics_path = os.path.join(result['run_log_dir'], 'metrics.csv')
+            run_metrics = pd.read_csv(metrics_path)
+            run_metrics.insert(0, 'run_index', result['run_index'])
+            run_metrics.insert(1, 'seed', result['seed'])
+            metric_frames.append(run_metrics)
+        pd.concat(metric_frames, ignore_index=True).to_csv(
+            os.path.join(base_log_dir, 'all_runs_metrics.csv'),
+            index=False,
+        )
 
     print(f"\nAll results saved to: {base_log_dir}")
 

@@ -1,0 +1,160 @@
+{
+  "DirectedAcyclicGraph": {
+    "A1": {
+      "next": [
+        "A2"
+      ],
+      "transition_probability": [
+        1.0
+      ]
+    },
+    "A2": {
+      "next": [
+        "A3"
+      ],
+      "transition_probability": [
+        1.0
+      ]
+    },
+    "A3": {
+      "next": [
+        "A4"
+      ],
+      "transition_probability": [
+        1.0
+      ]
+    },
+    "A4": {
+      "next": [
+        "A5"
+      ],
+      "transition_probability": [
+        1.0
+      ]
+    },
+    "A5": {
+      "next": [
+        "A6"
+      ],
+      "transition_probability": [
+        1.0
+      ]
+    },
+    "A6": {
+      "next": [
+        "A7"
+      ],
+      "transition_probability": [
+        1.0
+      ]
+    },
+    "A7": {
+      "next": [
+        "A8"
+      ],
+      "transition_probability": [
+        1.0
+      ]
+    },
+    "A8": {
+      "next": [
+        "A9"
+      ],
+      "transition_probability": [
+        1.0
+      ]
+    },
+    "A9": {
+      "next": [
+        "A10"
+      ],
+      "transition_probability": [
+        1.0
+      ]
+    },
+    "A10": {
+      "next": [
+        "A11"
+      ],
+      "transition_probability": [
+        1.0
+      ]
+    },
+    "A11": {
+      "next": [
+        "A12"
+      ],
+      "transition_probability": [
+        1.0
+      ]
+    },
+    "A12": {
+      "next": [
+        "A13"
+      ],
+      "transition_probability": [
+        1.0
+      ]
+    },
+    "A13": {
+      "next": [
+        "A14"
+      ],
+      "transition_probability": [
+        1.0
+      ]
+    },
+    "A14": {
+      "next": [
+        "A15"
+      ],
+      "transition_probability": [
+        1.0
+      ]
+    },
+    "A15": {
+      "next": [
+        "A16"
+      ],
+      "transition_probability": [
+        1.0
+      ]
+    },
+    "A16": {
+      "next": [
+        "A17"
+      ],
+      "transition_probability": [
+        1.0
+      ]
+    },
+    "A17": {
+      "next": [
+        "A18"
+      ],
+      "transition_probability": [
+        1.0
+      ]
+    },
+    "A18": {
+      "next": [
+        "A19"
+      ],
+      "transition_probability": [
+        1.0
+      ]
+    },
+    "A19": {
+      "next": [
+        "A20"
+      ],
+      "transition_probability": [
+        1.0
+      ]
+    },
+    "A20": {
+      "next": [],
+      "transition_probability": []
+    }
+  }
+}

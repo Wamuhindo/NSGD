@@ -1,0 +1,85 @@
+# Sanitycheck Metric Report
+
+This report is generated from the run-level CSV outputs. It includes graph-level line plots and node-level heatmaps for request counts, probabilities, instance counts, and configured distribution parameters.
+
+## Source Data
+
+- Results CSV: `results_figures/event_budget_metric_report_smoke_results.csv`
+- Combined metrics CSV: `results_figures/event_budget_metric_report_smoke_metrics.csv`
+
+## Final Chain-Length Snapshot
+
+| scenario | L | time cost | event cost | warm reqs | cold reqs | queued reqs | rejected reqs | p cold | p warm | p queued | p reject |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| event_budget | 1 | 118.5565 | 122.5062 | 24758 | 194 | 193 | 0 | 0.0078 | 1.0000 | 0.0078 | 0.0000 |
+
+## Interpretation
+
+- Cost alone is not enough: lower resource cost can coincide with higher rejection.
+- Warm, cold, queued, init, and rejection metrics separate service quality from resource usage.
+- Node heatmaps show whether graph-level behavior is spread across the chain or concentrated at specific nodes.
+- Distribution-rate plots document the configured rates and mean times used to make longer chains comparable.
+
+## Graph-Level Plots
+
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_time_avg_cost.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_event_avg_cost.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_requests_total.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_requests_warm.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_requests_cold.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_requests_init_free.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_requests_init_reserved.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_requests_queued.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_requests_reject.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_external_arrivals.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_internal_arrivals.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_prob_cold.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_prob_warm.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_prob_queued.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_prob_reject.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_inst_count_avg.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_inst_running_count_avg.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_inst_idle_count_avg.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_inst_init_free_count_avg.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_inst_init_reserved_count_avg.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_inst_queued_jobs_count_avg.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_warm_service_rate.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_warm_service_mean_time.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_cold_service_rate.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_cold_service_mean_time.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_cold_start_rate.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_cold_start_mean_time.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_expiration_rate.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_expiration_mean_time.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_total_expected_warm_service_time.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_total_expected_cold_service_time.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_total_expected_cold_start_time.png`
+- `results_figures/event_budget_metric_report_smoke_plots/graph/event_budget_metric_report_smoke_total_expected_expiration_time.png`
+
+## Node-Level Heatmaps
+
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_prob_cold_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_prob_warm_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_prob_queued_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_prob_reject_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_reqs_total_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_reqs_warm_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_reqs_cold_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_reqs_init_free_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_reqs_init_reserved_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_reqs_queued_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_reqs_reject_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_inst_count_avg_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_inst_running_count_avg_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_inst_idle_count_avg_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_inst_init_free_count_avg_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_inst_init_reserved_count_avg_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_inst_queued_jobs_count_avg_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_warm_service_rate_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_warm_service_mean_time_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_cold_service_rate_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_cold_service_mean_time_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_cold_start_rate_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_cold_start_mean_time_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_expiration_rate_event_budget.png`
+- `results_figures/event_budget_metric_report_smoke_plots/node/event_budget_metric_report_smoke_node_expiration_mean_time_event_budget.png`
