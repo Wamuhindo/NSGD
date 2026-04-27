@@ -1,55 +1,0 @@
-Loading configuration from: /opt/Projects/Soft2/NSGD/sanitycheck/fixed_external/inputs/input_chain_L03.json
-Loading DAG graph from: /opt/Projects/Soft2/NSGD/sanitycheck/fixed_external/dags/DAG_chain_L03.json
-['A1', 'A2', 'A3']
-[[0. 1. 0.]
- [0. 0. 1.]
- [0. 0. 0.]]
-Expected per-node arrival rates: [10. 10. 10.]
-Topological order: ['A1', 'A2', 'A3']
-Transition matrix:
-[[0. 1. 0.]
- [0. 0. 1.]
- [0. 0. 0.]]
-Experiment will run with the following seeds: [1]
-
-================================================================================
-Starting Graph Run 1/1 | seed=1 | theta_init=[0.3333333333333333, 0.3333333333333333, 30]
-arrival_rate=10.0000 | max_concurrency=100000
-root=A1 | nodes=['A1', 'A2', 'A3']
-Log directory: logs/sanitycheck_fixed_external_L03_arr10.0_20260427_092708/theta_0.3333333333333333_0.3333333333333333_30/graph_run_1_seed_1
-================================================================================
-
-  0%|          | 0/500000 [00:00<?, ?it/s]  1%|          | 5001/500000 [00:00<00:52, 9467.00it/s]  2%|▏         | 10002/500000 [00:01<00:52, 9315.81it/s]  3%|▎         | 15003/500000 [00:01<00:52, 9217.18it/s]  4%|▍         | 20004/500000 [00:02<00:53, 8996.82it/s]  5%|▌         | 25005/500000 [00:02<00:53, 8932.30it/s]  6%|▌         | 30006/500000 [00:03<00:53, 8760.35it/s]100%|██████████| 500000/500000 [00:03<00:00, 338040.00it/s]100%|██████████| 500000/500000 [00:03<00:00, 138824.52it/s]
-n = 2, theta = [ 0.33333333  0.33333333 30.        ], grad = [0. 0. 0.], cost+ = 618.6227, cost- = 56.4870, tau_n = 693, perturbations = [0. 0. 0.]
-n = 2, theta = [ 0.33333333  0.33333333 30.        ], grad = [0. 0. 0.], cost+ = 618.6227, cost- = 56.4870, tau_n = 693, perturbations = [0. 0. 0.]
-n = 2, theta = [ 0.33333333  0.33333333 30.        ], grad = [0. 0. 0.], cost+ = 618.6227, cost- = 56.4870, tau_n = 693, perturbations = [0. 0. 0.]
-n = 3, theta = [ 0.33333333  0.33333333 30.        ], grad = [0. 0. 0.], cost+ = 217.5191, cost- = 194.0537, tau_n = 1098, perturbations = [0. 0. 0.]
-n = 3, theta = [ 0.33333333  0.33333333 30.        ], grad = [0. 0. 0.], cost+ = 217.5191, cost- = 194.0537, tau_n = 1098, perturbations = [0. 0. 0.]
-n = 3, theta = [ 0.33333333  0.33333333 30.        ], grad = [0. 0. 0.], cost+ = 217.5191, cost- = 194.0537, tau_n = 1098, perturbations = [0. 0. 0.]
-n = 4, theta = [ 0.33333333  0.33333333 30.        ], grad = [0. 0. 0.], cost+ = 198.5494, cost- = 206.7532, tau_n = 1386, perturbations = [0. 0. 0.]
-n = 4, theta = [ 0.33333333  0.33333333 30.        ], grad = [0. 0. 0.], cost+ = 198.5494, cost- = 206.7532, tau_n = 1386, perturbations = [0. 0. 0.]
-n = 4, theta = [ 0.33333333  0.33333333 30.        ], grad = [0. 0. 0.], cost+ = 198.5494, cost- = 206.7532, tau_n = 1386, perturbations = [0. 0. 0.]
-n = 5, theta = [ 0.33333333  0.33333333 30.        ], grad = [0. 0. 0.], cost+ = 155.7411, cost- = 216.1905, tau_n = 1609, perturbations = [0. 0. 0.]
-n = 5, theta = [ 0.33333333  0.33333333 30.        ], grad = [0. 0. 0.], cost+ = 155.7411, cost- = 216.1905, tau_n = 1609, perturbations = [0. 0. 0.]
-n = 5, theta = [ 0.33333333  0.33333333 30.        ], grad = [0. 0. 0.], cost+ = 155.7411, cost- = 216.1905, tau_n = 1609, perturbations = [0. 0. 0.]
-n = 6, theta = [ 0.33333333  0.33333333 30.        ], grad = [0. 0. 0.], cost+ = 163.0441, cost- = 193.4461, tau_n = 1791, perturbations = [0. 0. 0.]
-n = 6, theta = [ 0.33333333  0.33333333 30.        ], grad = [0. 0. 0.], cost+ = 163.0441, cost- = 193.4461, tau_n = 1791, perturbations = [0. 0. 0.]
-n = 6, theta = [ 0.33333333  0.33333333 30.        ], grad = [0. 0. 0.], cost+ = 163.0441, cost- = 193.4461, tau_n = 1791, perturbations = [0. 0. 0.]
-
-Results for Graph Run 1:
-External arrivals: 5133
-Internal arrivals: 10249
-Graph requests: 15382
-Graph average cost: 194.7285
-Graph time-average cost: 184.7760
-Graph cold-start probability: 0.0137
-Graph rejection probability: 0.0000
-Execution Time: 3.61s (0.06min)
-
-================================================================================
-GRAPH EXPERIMENT SUMMARY
-================================================================================
-Total runs completed: 1/1
-Total time: 3.62s (0.06min)
-
-All results saved to: logs/sanitycheck_fixed_external_L03_arr10.0_20260427_092708

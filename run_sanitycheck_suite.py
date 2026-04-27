@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 import csv
 import json
 import subprocess
@@ -14,7 +15,7 @@ SIMULATE = ROOT / "AutoscalerFaasScalarVectorial" / "simulate.py"
 SANITY_DIR = ROOT / "sanitycheck"
 FIG_DIR = ROOT / "results_figures"
 
-CHAIN_LENGTHS = range(1, 11)
+DEFAULT_MAX_LENGTH = 10
 
 BASE_ARRIVAL_RATE = 10.0
 BASE_WARM_SERVICE_RATE = 1.0
@@ -131,12 +132,13 @@ def write_json(path, payload):
         f.write("\n")
 
 
-def generate_configs():
+def generate_configs(selected_scenarios, chain_lengths):
     generated = []
-    for scenario_name, scenario in SCENARIOS.items():
+    for scenario_name in selected_scenarios:
+        scenario = SCENARIOS[scenario_name]
         dag_dir = SANITY_DIR / scenario_name / "dags"
         input_dir = SANITY_DIR / scenario_name / "inputs"
-        for length in CHAIN_LENGTHS:
+        for length in chain_lengths:
             dag_path = dag_dir / f"DAG_chain_L{length:02d}.json"
             input_path = input_dir / f"input_chain_L{length:02d}.json"
             write_json(dag_path, build_dag(length))
@@ -207,9 +209,9 @@ def run_experiment(python, scenario_name, length, input_path, dag_path):
     }
 
 
-def save_results_csv(rows):
+def save_results_csv(rows, output_prefix):
     FIG_DIR.mkdir(parents=True, exist_ok=True)
-    csv_path = FIG_DIR / "sanitycheck_results.csv"
+    csv_path = FIG_DIR / f"{output_prefix}_results.csv"
     fieldnames = [
         "scenario",
         "chain_length",
@@ -232,10 +234,10 @@ def save_results_csv(rows):
     return csv_path
 
 
-def plot_metric(rows, metric, ylabel, output_name):
+def plot_metric(rows, selected_scenarios, chain_lengths, metric, ylabel, output_name):
     FIG_DIR.mkdir(parents=True, exist_ok=True)
-    plt.figure(figsize=(8, 5))
-    for scenario_name in SCENARIOS:
+    plt.figure(figsize=(10, 5))
+    for scenario_name in selected_scenarios:
         scenario_rows = sorted(
             [row for row in rows if row["scenario"] == scenario_name],
             key=lambda row: row["chain_length"],
@@ -245,7 +247,11 @@ def plot_metric(rows, metric, ylabel, output_name):
         plt.plot(xs, ys, marker="o", label=scenario_name)
     plt.xlabel("Chain length")
     plt.ylabel(ylabel)
-    plt.xticks(list(CHAIN_LENGTHS))
+    tick_step = 1 if len(chain_lengths) <= 15 else 5
+    ticks = [x for x in chain_lengths if (x - chain_lengths[0]) % tick_step == 0]
+    if chain_lengths[-1] not in ticks:
+        ticks.append(chain_lengths[-1])
+    plt.xticks(ticks)
     plt.grid(True, alpha=0.3)
     plt.legend()
     plt.tight_layout()
@@ -255,8 +261,8 @@ def plot_metric(rows, metric, ylabel, output_name):
     return output_path
 
 
-def save_summary(rows):
-    summary_path = FIG_DIR / "sanitycheck_summary.md"
+def save_summary(rows, output_prefix):
+    summary_path = FIG_DIR / f"{output_prefix}_summary.md"
     lines = [
         "# Sanitycheck Results",
         "",
@@ -273,40 +279,72 @@ def save_summary(rows):
     return summary_path
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Generate and run graph sanitycheck experiments.")
+    parser.add_argument("--max-length", type=int, default=DEFAULT_MAX_LENGTH)
+    parser.add_argument("--min-length", type=int, default=1)
+    parser.add_argument(
+        "--scenario",
+        action="append",
+        choices=sorted(SCENARIOS.keys()),
+        help="Scenario to run. Repeat for multiple. Defaults to all scenarios.",
+    )
+    parser.add_argument(
+        "--output-prefix",
+        default="sanitycheck",
+        help="Prefix for CSV, summary, and figure filenames in results_figures.",
+    )
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
+    if args.min_length < 1 or args.max_length < args.min_length:
+        raise ValueError("--max-length must be >= --min-length >= 1")
+
     python = PYTHON if PYTHON.exists() else Path(sys.executable)
-    generated = generate_configs()
+    selected_scenarios = args.scenario or list(SCENARIOS.keys())
+    chain_lengths = list(range(args.min_length, args.max_length + 1))
+    generated = generate_configs(selected_scenarios, chain_lengths)
 
     rows = []
     for scenario_name, length, input_path, dag_path in generated:
         rows.append(run_experiment(python, scenario_name, length, input_path, dag_path))
 
-    csv_path = save_results_csv(rows)
+    csv_path = save_results_csv(rows, args.output_prefix)
     cost_fig = plot_metric(
         rows,
+        selected_scenarios,
+        chain_lengths,
         "graph_time_avg_cost",
         "Graph time-average cost",
-        "sanitycheck_time_avg_cost.png",
+        f"{args.output_prefix}_time_avg_cost.png",
     )
     event_cost_fig = plot_metric(
         rows,
+        selected_scenarios,
+        chain_lengths,
         "graph_event_avg_cost",
         "Graph event-average cost",
-        "sanitycheck_event_avg_cost.png",
+        f"{args.output_prefix}_event_avg_cost.png",
     )
     external_fig = plot_metric(
         rows,
+        selected_scenarios,
+        chain_lengths,
         "external_arrivals",
         "External arrivals",
-        "sanitycheck_external_arrivals.png",
+        f"{args.output_prefix}_external_arrivals.png",
     )
     cold_fig = plot_metric(
         rows,
+        selected_scenarios,
+        chain_lengths,
         "graph_prob_cold",
         "Cold-start probability",
-        "sanitycheck_cold_probability.png",
+        f"{args.output_prefix}_cold_probability.png",
     )
-    summary_path = save_summary(rows)
+    summary_path = save_summary(rows, args.output_prefix)
 
     print("\nDone.")
     print(f"Generated configs: {SANITY_DIR}")

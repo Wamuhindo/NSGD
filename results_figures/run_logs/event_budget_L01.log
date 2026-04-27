@@ -1,43 +1,0 @@
-Loading configuration from: /opt/Projects/Soft2/NSGD/sanitycheck/event_budget/inputs/input_chain_L01.json
-Loading DAG graph from: /opt/Projects/Soft2/NSGD/sanitycheck/event_budget/dags/DAG_chain_L01.json
-['A1']
-[[0.]]
-Expected per-node arrival rates: [10.]
-Topological order: ['A1']
-Transition matrix:
-[[0.]]
-Experiment will run with the following seeds: [1]
-
-================================================================================
-Starting Graph Run 1/1 | seed=1 | theta_init=[1.0, 1.0, 10]
-arrival_rate=10.0000 | max_concurrency=100000
-root=A1 | nodes=['A1']
-Log directory: logs/sanitycheck_event_budget_L01_arr10.0_20260427_092931/theta_1.0_1.0_10/graph_run_1_seed_1
-================================================================================
-
-  0%|          | 0/50000 [00:00<?, ?it/s]  4%|▍         | 2004/50000 [00:00<00:03, 15944.99it/s]  8%|▊         | 4008/50000 [00:00<00:02, 16910.66it/s] 12%|█▏        | 6012/50000 [00:00<00:02, 17720.53it/s] 16%|█▌        | 8016/50000 [00:00<00:02, 18291.01it/s] 20%|██        | 10020/50000 [00:00<00:02, 18227.90it/s] 24%|██▍       | 12024/50000 [00:00<00:02, 17852.53it/s] 28%|██▊       | 14028/50000 [00:00<00:02, 17436.84it/s] 32%|███▏      | 16032/50000 [00:00<00:01, 18017.66it/s] 36%|███▌      | 18036/50000 [00:01<00:01, 17821.82it/s] 40%|████      | 20040/50000 [00:01<00:01, 17348.99it/s] 45%|████▌     | 22545/50000 [00:01<00:01, 18195.78it/s] 49%|████▉     | 24549/50000 [00:01<00:01, 18285.55it/s] 53%|█████▎    | 26553/50000 [00:01<00:01, 18449.56it/s] 57%|█████▋    | 28557/50000 [00:01<00:01, 16283.48it/s] 62%|██████▏   | 31062/50000 [00:01<00:01, 17372.43it/s] 66%|██████▌   | 33066/50000 [00:01<00:00, 17579.95it/s] 70%|███████   | 35070/50000 [00:02<00:00, 16923.36it/s] 75%|███████▌  | 37575/50000 [00:02<00:00, 17831.07it/s] 79%|███████▉  | 39579/50000 [00:02<00:00, 17870.20it/s] 83%|████████▎ | 41583/50000 [00:02<00:00, 17915.27it/s] 87%|████████▋ | 43587/50000 [00:02<00:00, 17720.45it/s] 91%|█████████ | 45591/50000 [00:02<00:00, 17690.13it/s] 95%|█████████▌| 47595/50000 [00:02<00:00, 17946.51it/s] 99%|█████████▉| 49599/50000 [00:02<00:00, 17745.07it/s]100%|██████████| 50000/50000 [00:02<00:00, 17071.45it/s]
-n = 2, theta = [ 1.  1. 10.], grad = [0. 0. 0.], cost+ = 511.4502, cost- = 124.8528, tau_n = 693, perturbations = [0. 0. 0.]
-n = 3, theta = [ 1.  1. 10.], grad = [0. 0. 0.], cost+ = 113.8087, cost- = 101.4872, tau_n = 1098, perturbations = [0. 0. 0.]
-n = 4, theta = [ 1.  1. 10.], grad = [0. 0. 0.], cost+ = 89.5317, cost- = 125.7742, tau_n = 1386, perturbations = [0. 0. 0.]
-n = 5, theta = [ 1.  1. 10.], grad = [0. 0. 0.], cost+ = 84.3543, cost- = 89.6464, tau_n = 1609, perturbations = [0. 0. 0.]
-n = 6, theta = [ 1.  1. 10.], grad = [0. 0. 0.], cost+ = 99.5061, cost- = 51.7700, tau_n = 1791, perturbations = [0. 0. 0.]
-n = 7, theta = [ 1.  1. 10.], grad = [0. 0. 0.], cost+ = 159.4517, cost- = 50.4771, tau_n = 1945, perturbations = [0. 0. 0.]
-n = 8, theta = [ 1.  1. 10.], grad = [0. 0. 0.], cost+ = 180.3280, cost- = 176.3021, tau_n = 2079, perturbations = [0. 0. 0.]
-
-Results for Graph Run 1:
-External arrivals: 24759
-Internal arrivals: 0
-Graph requests: 24759
-Graph average cost: 122.5062
-Graph time-average cost: 118.5565
-Graph cold-start probability: 0.0078
-Graph rejection probability: 0.0000
-Execution Time: 2.93s (0.05min)
-
-================================================================================
-GRAPH EXPERIMENT SUMMARY
-================================================================================
-Total runs completed: 1/1
-Total time: 2.94s (0.05min)
-
-All results saved to: logs/sanitycheck_event_budget_L01_arr10.0_20260427_092931
