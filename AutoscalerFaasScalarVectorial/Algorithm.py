@@ -147,6 +147,8 @@ class VectorialAutoScalingAlgorithm:
         """
         self.K_exp = kwargs.get('K_exp', 1000)
         self.gamma_min = kwargs.get('gamma_min', 1)
+        self.theta_stock_min = kwargs.get('theta_stock_min', 1)
+        self.theta_idle_min = kwargs.get('theta_idle_min', 1)
         self.prtb = kwargs.get('prtb', [
             [-0.5, 0.5],   # theta_stock perturbation choices
             [-0.5, 0.5],   # theta_idle perturbation choices
@@ -332,12 +334,12 @@ class VectorialAutoScalingAlgorithm:
             # Stochastic rounding for theta_stock (integer servers to spawn)
             theta_stock_real = opt_delta[0]
             theta_stock_step = self._stochastic_round(theta_stock_real, simulator.rang_delta_plus)
-            theta_stock_step = int(min(max(theta_stock_step, 1), self.N))
+            theta_stock_step = int(min(max(theta_stock_step, self.theta_stock_min), self.N))
 
             # Stochastic rounding for theta_idle (integer threshold)
             theta_idle_real = opt_delta[1]
             theta_idle_step = self._stochastic_round(theta_idle_real, simulator.rang_delta_min_plus)
-            theta_idle_step = int(min(max(theta_idle_step, 1), self.N))
+            theta_idle_step = int(min(max(theta_idle_step, self.theta_idle_min), self.N))
 
             # theta_exp is continuous, just clip to gamma_min
             theta_exp_step = max(opt_delta[2], self.gamma_min)
@@ -374,12 +376,12 @@ class VectorialAutoScalingAlgorithm:
             # Stochastic rounding for theta_stock
             theta_stock_real = opt_delta[0]
             theta_stock_step = self._stochastic_round(theta_stock_real, simulator.rang_delta_minus)
-            theta_stock_step = int(min(max(theta_stock_step, 1), self.N))
+            theta_stock_step = int(min(max(theta_stock_step, self.theta_stock_min), self.N))
 
             # Stochastic rounding for theta_idle
             theta_idle_real = opt_delta[1]
             theta_idle_step = self._stochastic_round(theta_idle_real, simulator.rang_delta_min_minus)
-            theta_idle_step = int(min(max(theta_idle_step, 1), self.N))
+            theta_idle_step = int(min(max(theta_idle_step, self.theta_idle_min), self.N))
 
             # theta_exp clipping
             theta_exp_step = max(opt_delta[2], self.gamma_min)
@@ -445,9 +447,9 @@ class VectorialAutoScalingAlgorithm:
                     opt = self.theta - gamma_n * grad
 
                 # --- Clip parameters to valid ranges ---
-                # theta_stock in [1, N], theta_idle in [0, N], theta_exp in [gamma_min, inf)
-                theta_stock_opt = min(max(opt[0], 1), self.N)
-                theta_idle_opt = min(max(opt[1], 1), self.N)
+                # theta_stock/theta_idle bounds default to [1, N] but can be relaxed for tests.
+                theta_stock_opt = min(max(opt[0], self.theta_stock_min), self.N)
+                theta_idle_opt = min(max(opt[1], self.theta_idle_min), self.N)
                 theta_exp_opt = max(opt[2], self.gamma_min)
                 new_theta = np.array([theta_stock_opt, theta_idle_opt, theta_exp_opt])
 

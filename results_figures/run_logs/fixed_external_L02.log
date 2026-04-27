@@ -1,0 +1,46 @@
+Loading configuration from: /opt/Projects/Soft2/NSGD/sanitycheck/fixed_external/inputs/input_chain_L02.json
+Loading DAG graph from: /opt/Projects/Soft2/NSGD/sanitycheck/fixed_external/dags/DAG_chain_L02.json
+['A1', 'A2']
+[[0. 1.]
+ [0. 0.]]
+Expected per-node arrival rates: [10. 10.]
+Topological order: ['A1', 'A2']
+Transition matrix:
+[[0. 1.]
+ [0. 0.]]
+Experiment will run with the following seeds: [1]
+
+================================================================================
+Starting Graph Run 1/1 | seed=1 | theta_init=[0.5, 0.5, 20]
+arrival_rate=10.0000 | max_concurrency=100000
+root=A1 | nodes=['A1', 'A2']
+Log directory: logs/sanitycheck_fixed_external_L02_arr10.0_20260427_092705/theta_0.5_0.5_20/graph_run_1_seed_1
+================================================================================
+
+  0%|          | 0/500000 [00:00<?, ?it/s]  1%|          | 5001/500000 [00:00<00:40, 12075.59it/s]  2%|▏         | 10002/500000 [00:00<00:40, 12226.72it/s]  3%|▎         | 15003/500000 [00:01<00:39, 12217.52it/s]  4%|▍         | 20004/500000 [00:01<00:38, 12548.28it/s]100%|██████████| 500000/500000 [00:01<00:00, 591786.79it/s]100%|██████████| 500000/500000 [00:01<00:00, 288870.24it/s]
+n = 2, theta = [ 0.5  0.5 20. ], grad = [0. 0. 0.], cost+ = 534.1674, cost- = 84.9293, tau_n = 693, perturbations = [0. 0. 0.]
+n = 2, theta = [ 0.5  0.5 20. ], grad = [0. 0. 0.], cost+ = 534.1674, cost- = 84.9293, tau_n = 693, perturbations = [0. 0. 0.]
+n = 3, theta = [ 0.5  0.5 20. ], grad = [0. 0. 0.], cost+ = 145.2641, cost- = 119.5128, tau_n = 1098, perturbations = [0. 0. 0.]
+n = 3, theta = [ 0.5  0.5 20. ], grad = [0. 0. 0.], cost+ = 145.2641, cost- = 119.5128, tau_n = 1098, perturbations = [0. 0. 0.]
+n = 4, theta = [ 0.5  0.5 20. ], grad = [0. 0. 0.], cost+ = 179.7460, cost- = 72.8553, tau_n = 1386, perturbations = [0. 0. 0.]
+n = 4, theta = [ 0.5  0.5 20. ], grad = [0. 0. 0.], cost+ = 179.7460, cost- = 72.8553, tau_n = 1386, perturbations = [0. 0. 0.]
+n = 5, theta = [ 0.5  0.5 20. ], grad = [0. 0. 0.], cost+ = 143.7498, cost- = 156.2862, tau_n = 1609, perturbations = [0. 0. 0.]
+n = 5, theta = [ 0.5  0.5 20. ], grad = [0. 0. 0.], cost+ = 143.7498, cost- = 156.2862, tau_n = 1609, perturbations = [0. 0. 0.]
+
+Results for Graph Run 1:
+External arrivals: 5133
+Internal arrivals: 5130
+Graph requests: 10263
+Graph average cost: 155.0341
+Graph time-average cost: 148.6062
+Graph cold-start probability: 0.0119
+Graph rejection probability: 0.0000
+Execution Time: 1.73s (0.03min)
+
+================================================================================
+GRAPH EXPERIMENT SUMMARY
+================================================================================
+Total runs completed: 1/1
+Total time: 1.74s (0.03min)
+
+All results saved to: logs/sanitycheck_fixed_external_L02_arr10.0_20260427_092705

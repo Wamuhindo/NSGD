@@ -5,48 +5,38 @@
 
   "nodes": {
     "C1": {
-      "arrival_rate": 7.5,
       "warm_service":  {"rate": 1.0,   "type": "Exponential"},
       "cold_service":  {"rate": 100.0, "type": "Exponential"},
       "cold_start":    {"rate": 0.1,   "type": "Exponential"},
       "expiration":    {"rate": 0.01,  "type": "Exponential"},
-      "max_concurrency": 50,
       "theta": [[1,1,5], [1,5,5], [3,4,10], [10,2,1]]
     },
     "C2": {
-      "arrival_rate": 0,
       "warm_service":  {"rate": 2.0,   "type": "Exponential"},
       "cold_service":  {"rate": 80.0,  "type": "Exponential"},
       "cold_start":    {"rate": 0.2,   "type": "Exponential"},
       "expiration":    {"rate": 0.01,  "type": "Exponential"},
-      "max_concurrency": 40,
       "theta": [[1,1,5], [1,5,5], [3,4,10], [10,2,1]]
     },
     "C3": {
-      "arrival_rate": 0,
       "warm_service":  {"rate": 0.5,   "type": "Exponential"},
       "cold_service":  {"rate": 60.0,  "type": "Exponential"},
       "cold_start":    {"rate": 0.05,  "type": "Exponential"},
       "expiration":    {"rate": 0.005, "type": "Exponential"},
-      "max_concurrency": 80,
       "theta": [[1,1,5], [1,5,5], [3,4,10], [10,2,1]]
     },
     "C4": {
-      "arrival_rate": 0,
       "warm_service":  {"rate": 3.0,   "type": "Exponential"},
       "cold_service":  {"rate": 120.0, "type": "Exponential"},
       "cold_start":    {"rate": 0.3,   "type": "Exponential"},
       "expiration":    {"rate": 0.02,  "type": "Exponential"},
-      "max_concurrency": 30,
       "theta": [[1,1,5], [1,5,5], [3,4,10], [10,2,1]]
     },
     "C5": {
-      "arrival_rate": 0,
       "warm_service":  {"rate": 1.5,   "type": "Exponential"},
       "cold_service":  {"rate": 90.0,  "type": "Exponential"},
       "cold_start":    {"rate": 0.15,  "type": "Exponential"},
       "expiration":    {"rate": 0.01,  "type": "Exponential"},
-      "max_concurrency": 60,
       "theta": [[1,1,5], [1,5,5], [3,4,10], [10,2,1]]
     }
   },
@@ -61,7 +51,7 @@
     [3, 4, 10],
     [10, 2, 1]
   ],
-  "tau": 100000,
+  "tau": 10000,
   "max_concurrency": 50,
   "max_time": 4000000,
   "log_dir": "logs/",

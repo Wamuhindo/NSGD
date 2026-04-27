@@ -1,0 +1,38 @@
+Loading configuration from: /opt/Projects/Soft2/NSGD/sanitycheck/fixed_external/inputs/input_chain_L01.json
+Loading DAG graph from: /opt/Projects/Soft2/NSGD/sanitycheck/fixed_external/dags/DAG_chain_L01.json
+['A1']
+[[0.]]
+Expected per-node arrival rates: [10.]
+Topological order: ['A1']
+Transition matrix:
+[[0.]]
+Experiment will run with the following seeds: [1]
+
+================================================================================
+Starting Graph Run 1/1 | seed=1 | theta_init=[1.0, 1.0, 10]
+arrival_rate=10.0000 | max_concurrency=100000
+root=A1 | nodes=['A1']
+Log directory: logs/sanitycheck_fixed_external_L01_arr10.0_20260427_092703/theta_1.0_1.0_10/graph_run_1_seed_1
+================================================================================
+
+  0%|          | 0/500000 [00:00<?, ?it/s]  1%|          | 5001/500000 [00:00<00:27, 18310.56it/s]  2%|▏         | 10002/500000 [00:00<00:26, 18781.69it/s]100%|██████████| 500000/500000 [00:00<00:00, 873958.26it/s]
+n = 2, theta = [ 1.  1. 10.], grad = [0. 0. 0.], cost+ = 511.4502, cost- = 124.8528, tau_n = 693, perturbations = [0. 0. 0.]
+n = 3, theta = [ 1.  1. 10.], grad = [0. 0. 0.], cost+ = 113.8087, cost- = 101.4872, tau_n = 1098, perturbations = [0. 0. 0.]
+
+Results for Graph Run 1:
+External arrivals: 5133
+Internal arrivals: 0
+Graph requests: 5133
+Graph average cost: 165.0628
+Graph time-average cost: 163.2555
+Graph cold-start probability: 0.0119
+Graph rejection probability: 0.0000
+Execution Time: 0.58s (0.01min)
+
+================================================================================
+GRAPH EXPERIMENT SUMMARY
+================================================================================
+Total runs completed: 1/1
+Total time: 0.58s (0.01min)
+
+All results saved to: logs/sanitycheck_fixed_external_L01_arr10.0_20260427_092703

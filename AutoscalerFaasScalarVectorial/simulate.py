@@ -25,6 +25,7 @@ import time
 import pandas as pd
 from tqdm import tqdm
 import random
+from collections import deque
 
 
 class ServerlessSimulator:
@@ -43,6 +44,7 @@ class ServerlessSimulator:
                  maximum_concurrency=50, log_dir="", **kwargs):
         super().__init__()
         self.seed = kwargs.get("seed", 1)
+        self.cluster = kwargs.get("cluster", None)
 
         # Spawn independent RNG streams from a single seed
         ss = SeedSequence(self.seed)
@@ -75,6 +77,7 @@ class ServerlessSimulator:
             raise Exception('Cold Service process not defined!')
 
         # --- Setup cold start process ---
+        self.cold_start_process = cold_start_process
         if 'cold_start_rate' in kwargs:
             self.cold_start_process = ExpSimProcess(rate=kwargs.get('cold_start_rate'), gen=cs_rng)
         if self.cold_start_process is None:
@@ -267,14 +270,20 @@ class ServerlessSimulator:
 
     def current_concurrency(self):
         """Current number of concurrently occupied slots (running + reserved + booked)."""
+        if self.cluster is not None:
+            return self.cluster.current_concurrency()
         return self.running_count + self.init_reserved_count + self.init_free_booked_count
 
     def current_cold_servers(self):
         """Number of cold (available) server slots."""
+        if self.cluster is not None:
+            return self.cluster.current_cold_servers()
         return self.maximum_concurrency - (self.running_count + self.init_reserved_count +
                                            self.init_free_booked_count + self.init_free_count + self.idle_count)
 
     def has_reached_max_concurrency(self):
+        if self.cluster is not None:
+            return self.cluster.has_reached_max_concurrency()
         return self.current_concurrency() >= self.maximum_concurrency
 
     # ------------------------------------------------------------------
@@ -428,9 +437,12 @@ class ServerlessSimulator:
                                                         self.init_free_booked_count)
         self.state[SystemState.BUSY.value] = self.running_count
         self.state[SystemState.IDLE_ON.value] = self.idle_count
-        self.state[SystemState.COLD.value] = self.maximum_concurrency - (
-            self.init_free_count + self.init_free_booked_count +
-            self.init_reserved_count + self.running_count + self.idle_count)
+        if self.cluster is not None:
+            self.state[SystemState.COLD.value] = self.cluster.current_cold_servers()
+        else:
+            self.state[SystemState.COLD.value] = self.maximum_concurrency - (
+                self.init_free_count + self.init_free_booked_count +
+                self.init_reserved_count + self.running_count + self.idle_count)
         self.autoscaler.set_has_rejected_job(self.job_rejected)
 
     def get_request_stats_between(self, start_t, end_t):
@@ -580,7 +592,7 @@ class ServerlessSimulator:
         return residence_time_avgs
 
     def get_cold_start_prob(self):
-        return self.total_cold_count / self.total_req_count
+        return self.total_cold_count / self.total_req_count if self.total_req_count > 0 else 0
 
     def get_average_lifespan(self):
         life_spans = np.array([s.get_life_span() for s in self.prev_servers])
@@ -596,7 +608,7 @@ class ServerlessSimulator:
             "reqs_queued": self.total_queued_jobs_count,
             "prob_cold": self.get_cold_start_prob(),
             "reqs_reject": self.total_reject_count,
-            "prob_reject": self.total_reject_count / self.total_req_count,
+            "prob_reject": self.total_reject_count / self.total_req_count if self.total_req_count > 0 else 0,
             "lifespan_avg": self.get_average_lifespan(),
             "inst_count_avg": self.get_average_server_count(),
             "inst_running_count_avg": self.get_average_server_running_count(),
@@ -788,6 +800,366 @@ class ServerlessSimulator:
         np.savetxt(f"{self.log_dir}/all_costs.csv", self.autoscaler.all_costs, delimiter=",", fmt="%2f")
 
 
+class GraphServerlessSimulator:
+    """Event-driven DAG simulator with one external stream and one shared cluster.
+
+    Each DAG node owns its own function pools and autoscaler, but arrivals,
+    downstream routing, and the maximum concurrency/resource budget are managed
+    here at graph level.
+    """
+
+    def __init__(self, config, node_order, transition_matrix, seed, run_idx,
+                 total_runs, base_log_dir, theta_init, k_gamma=None):
+        self.config = config
+        self.node_order = list(node_order)
+        self.transition_matrix = np.array(transition_matrix, dtype=float)
+        self.seed = seed
+        self.run_idx = run_idx
+        self.total_runs = total_runs
+        self.theta_init = theta_init
+        self.maximum_concurrency = config['max_concurrency']
+        self.log_dir = base_log_dir
+        self.optimization = config['optimization'].get('type', 'sgd')
+        self.max_time = config['max_time']
+        self.stop_by_simulated_time = config.get('stop_by_simulated_time', False)
+        self.max_simulated_time = config.get('max_simulated_time', self.max_time)
+        self.t = 0
+        self.job_rejected = False
+        self.internal_arrivals = deque()
+        self.routing_rng = np.random.default_rng(seed + 1000003)
+
+        ss = SeedSequence(seed + 2000003)
+        self.arrival_rng = default_rng(ss)
+        self.arrival_process = ExpSimProcess(rate=config['arrival_rate'], gen=self.arrival_rng)
+
+        self.node_sims = {}
+        os.makedirs(self.log_dir, exist_ok=True)
+        for node_idx, node_name in enumerate(self.node_order):
+            if node_name not in config['nodes']:
+                raise KeyError(f"Node '{node_name}' from DAG is missing from config['nodes']")
+
+            node_config = config['nodes'][node_name]
+            node_log_dir = os.path.join(self.log_dir, f"node_{node_name}")
+            os.makedirs(node_log_dir, exist_ok=True)
+
+            algo_params = self._build_algo_params(theta_init, k_gamma)
+            sim = ServerlessSimulator(
+                arrival_rate=config['arrival_rate'],
+                warm_service_rate=node_config['warm_service']['rate'],
+                cold_service_rate=node_config['cold_service']['rate'],
+                cold_start_rate=node_config['cold_start']['rate'],
+                maximum_concurrency=self.maximum_concurrency,
+                log_dir=node_log_dir,
+                service_process_type=node_config['warm_service'].get('type', 'Exponential'),
+                expiration_process_type=node_config.get('expiration', {}).get('type', 'Exponential'),
+                seed=seed + node_idx * 1009,
+                cluster=self,
+                **algo_params
+            )
+            sim.optimization = self.optimization
+            sim.initialiaze_system(0, 0, 0, 0, 0)
+            self.node_sims[node_name] = sim
+
+        self.root_node = self.node_order[0]
+
+    def _build_algo_params(self, theta_init, k_gamma):
+        return {
+            "k_gamma": np.array(k_gamma if k_gamma is not None else self.config.get('k_gamma', [1, 1, 1])),
+            "k_delta": self.config.get('k_delta', 1),
+            "K": self.config['K'],
+            "theta_init": theta_init,
+            "tau": self.config['tau'],
+            "max_time": self.config['max_time'],
+            "K_exp": self.config.get('K_exp', 1000),
+            "gamma_min": self.config.get('gamma_min', 1),
+            "theta_stock_min": self.config.get('theta_stock_min', 1),
+            "theta_idle_min": self.config.get('theta_idle_min', 1),
+            "prtb": self.config.get('prtb', [[-0.5, 0.5], [-0.5, 0.5], [-1, 1]]),
+            "learn_mask": self.config.get('learn_mask', [True, True, True]),
+            "accumulate_cost": self.config.get('accumulate_cost', True),
+        }
+
+    def req(self):
+        return self.arrival_process.generate_trace()
+
+    def current_concurrency(self):
+        return sum(
+            sim.running_count + sim.init_reserved_count + sim.init_free_booked_count
+            for sim in self.node_sims.values()
+        )
+
+    def current_cold_servers(self):
+        used_servers = sum(sim.server_count for sim in self.node_sims.values())
+        return max(0, self.maximum_concurrency - used_servers)
+
+    def has_reached_max_concurrency(self):
+        return self.current_concurrency() >= self.maximum_concurrency
+
+    def has_server(self):
+        return any(sim.has_server() for sim in self.node_sims.values())
+
+    def running_condition(self):
+        if self.stop_by_simulated_time:
+            return self.t < self.max_simulated_time
+        return self.node_sims[self.root_node].autoscaler.running_condition()
+
+    def _append_histories(self, t):
+        for sim in self.node_sims.values():
+            sim.hist_times.append(t)
+            sim.update_hist_arrays(t)
+
+    def _global_state(self):
+        init_free = sum(sim.init_free_count for sim in self.node_sims.values())
+        init_booked = sum(sim.init_free_booked_count for sim in self.node_sims.values())
+        init_reserved = sum(sim.init_reserved_count for sim in self.node_sims.values())
+        running = sum(sim.running_count for sim in self.node_sims.values())
+        idle = sum(sim.idle_count for sim in self.node_sims.values())
+        cold = self.current_cold_servers()
+        state = [0] * len(SystemState)
+        state[SystemState.COLD.value] = cold
+        state[SystemState.IDLE_ON.value] = idle
+        state[SystemState.BUSY.value] = running
+        state[SystemState.INITIALIZING.value] = init_free + init_booked + init_reserved
+        state[SystemState.INIT_RESERVED.value] = init_reserved + init_booked
+        return state
+
+    def _advance_all_autoscalers(self):
+        global_state = self._global_state()
+        rejected = self.job_rejected
+        for sim in self.node_sims.values():
+            sim.update_state()
+            sim.autoscaler.set_has_rejected_job(rejected)
+            sim.autoscaler.simulate_step(global_state, sim)
+            sim.job_rejected = False
+        self.job_rejected = False
+
+    def _dispatch_arrival(self, node_name, t, external=False):
+        sim = self.node_sims[node_name]
+        theta_step = sim.autoscaler.get_theta_step()
+        theta_stock = theta_step[0]
+        theta_idle = theta_step[1]
+
+        sim.t = t
+        sim.total_requests_log.append(t)
+        if external:
+            self.total_external_arrivals += 1
+
+        if sim.is_warm_available(t):
+            sim.warm_start_arrival(t, theta_stock, theta_idle)
+        elif sim.is_init_free_available(t):
+            sim.init_free_arrival(t, theta_stock)
+        else:
+            sim.cold_start_arrival(t, theta_stock=theta_stock)
+
+        if sim.job_rejected:
+            self.job_rejected = True
+            self.total_graph_reject += 1
+
+    def _next_server_transition(self, t):
+        best_node = None
+        best_idx = None
+        best_dt = np.inf
+        for node_name, sim in self.node_sims.items():
+            if not sim.has_server():
+                continue
+            transitions = np.array([s.get_next_transition_time(t) for s in sim.servers])
+            idx = int(transitions.argmin())
+            dt = transitions[idx]
+            if dt < best_dt:
+                best_node = node_name
+                best_idx = idx
+                best_dt = dt
+        return best_node, best_idx, best_dt
+
+    def _route_downstream(self, node_name, t):
+        idx = self.node_order.index(node_name)
+        probs = self.transition_matrix[idx]
+        total_prob = probs.sum()
+        if total_prob <= 0:
+            return
+        if total_prob > 1 + 1e-9:
+            raise ValueError(f"Outgoing probabilities for node {node_name} sum to {total_prob}, expected <= 1")
+
+        draw = self.routing_rng.random()
+        cumulative = 0.0
+        for next_idx, prob in enumerate(probs):
+            cumulative += prob
+            if draw <= cumulative:
+                self.internal_arrivals.append((t, self.node_order[next_idx]))
+                self.total_internal_arrivals += 1
+                return
+
+    def _process_server_transition(self, node_name, idx, t):
+        sim = self.node_sims[node_name]
+        sim.t = t
+        old_state = sim.servers[idx].get_state()
+        new_state = sim.servers[idx].make_transition()
+        completed_request = False
+
+        if new_state == FunctionState.COLD:
+            sim.prev_servers.append(sim.servers[idx])
+            sim.idle_count -= 1
+            sim.server_count -= 1
+            del sim.servers[idx]
+
+        elif new_state == FunctionState.IDLE_ON:
+            if old_state == FunctionState.BUSY:
+                sim.total_finished += 1
+                sim.running_count -= 1
+                completed_request = True
+            elif old_state == FunctionState.INIT_FREE and not sim.servers[idx].is_reserved():
+                sim.init_free_count -= 1
+                sim.servers[idx].unreserve()
+            else:
+                raise Exception(f"Unknown transition to IDLE_ON from: {old_state}")
+            sim.idle_count += 1
+
+        elif new_state == FunctionState.BUSY:
+            sim.served_requests_log.append(t)
+            if old_state == FunctionState.INIT_RESERVED:
+                sim.init_reserved_count -= 1
+            elif old_state == FunctionState.INIT_FREE and sim.servers[idx].is_reserved():
+                sim.servers[idx].update_next_transition(t)
+                sim.servers[idx].unreserve()
+                sim.init_free_booked_count -= 1
+                sim.queued_jobs_count -= 1
+                sim.total_warm_count += 1
+                sim.hist_req_warm_idxs.append(len(sim.hist_times) - 1)
+            else:
+                raise Exception(f"Unknown transition to BUSY from: {old_state}")
+            sim.running_count += 1
+
+        else:
+            raise Exception(f"Unknown transition to state: {new_state}")
+
+        if completed_request:
+            self._route_downstream(node_name, t)
+
+    def generate_trace(self, progress=False):
+        self.total_external_arrivals = 0
+        self.total_internal_arrivals = 0
+        self.total_graph_reject = 0
+        self.graph_cost_time_integral = 0.0
+
+        pbar = None
+        if progress:
+            pbar = tqdm(total=int(self.max_time))
+
+        t = 0
+        pbar_t_update = 0
+        pbar_interval = max(1, int(self.max_time / 100))
+        next_external_arrival = t + self.req()
+
+        while self.running_condition():
+            if progress:
+                current_steps = int(self.node_sims[self.root_node].autoscaler.t)
+                if current_steps - pbar_t_update > pbar_interval:
+                    pbar.update(current_steps - pbar_t_update)
+                    pbar_t_update = current_steps
+
+            self._append_histories(t)
+            state_before_event = self._global_state()
+
+            if self.internal_arrivals and self.internal_arrivals[0][0] <= t:
+                arrival_t, node_name = self.internal_arrivals.popleft()
+                self.graph_cost_time_integral += self.node_sims[self.root_node].autoscaler.compute_cost(
+                    state_before_event
+                ) * max(0, arrival_t - t)
+                t = arrival_t
+                self.t = t
+                self._dispatch_arrival(node_name, t, external=False)
+                self._advance_all_autoscalers()
+                continue
+
+            node_name, server_idx, server_dt = self._next_server_transition(t)
+            external_dt = next_external_arrival - t
+
+            if external_dt < server_dt:
+                if self.stop_by_simulated_time and next_external_arrival > self.max_simulated_time:
+                    self.graph_cost_time_integral += self.node_sims[self.root_node].autoscaler.compute_cost(
+                        state_before_event
+                    ) * max(0, self.max_simulated_time - t)
+                    t = self.max_simulated_time
+                    self.t = t
+                    break
+                self.graph_cost_time_integral += self.node_sims[self.root_node].autoscaler.compute_cost(
+                    state_before_event
+                ) * max(0, next_external_arrival - t)
+                t = next_external_arrival
+                self.t = t
+                next_external_arrival = t + self.req()
+                self._dispatch_arrival(self.root_node, t, external=True)
+                self._advance_all_autoscalers()
+                continue
+
+            if node_name is not None:
+                next_t = t + server_dt
+                if self.stop_by_simulated_time and next_t > self.max_simulated_time:
+                    self.graph_cost_time_integral += self.node_sims[self.root_node].autoscaler.compute_cost(
+                        state_before_event
+                    ) * max(0, self.max_simulated_time - t)
+                    t = self.max_simulated_time
+                    self.t = t
+                    break
+                self.graph_cost_time_integral += self.node_sims[self.root_node].autoscaler.compute_cost(
+                    state_before_event
+                ) * max(0, next_t - t)
+                t = t + server_dt
+                self.t = t
+                self._process_server_transition(node_name, server_idx, t)
+                self._advance_all_autoscalers()
+                continue
+
+            if self.stop_by_simulated_time and next_external_arrival > self.max_simulated_time:
+                self.graph_cost_time_integral += self.node_sims[self.root_node].autoscaler.compute_cost(
+                    state_before_event
+                ) * max(0, self.max_simulated_time - t)
+                t = self.max_simulated_time
+                self.t = t
+                break
+
+            self.graph_cost_time_integral += self.node_sims[self.root_node].autoscaler.compute_cost(
+                state_before_event
+            ) * max(0, next_external_arrival - t)
+            t = next_external_arrival
+            self.t = t
+            next_external_arrival = t + self.req()
+            self._dispatch_arrival(self.root_node, t, external=True)
+            self._advance_all_autoscalers()
+
+        for sim in self.node_sims.values():
+            sim.hist_times.append(t)
+            sim.calculate_time_lengths()
+            np.savetxt(f"{sim.log_dir}/theta.csv", sim.autoscaler.thetas, delimiter=",", fmt="%2f")
+            np.savetxt(f"{sim.log_dir}/all_costs.csv", sim.autoscaler.all_costs, delimiter=",", fmt="%2f")
+
+        root_costs = self.node_sims[self.root_node].autoscaler.all_costs
+        if root_costs:
+            np.savetxt(f"{self.log_dir}/graph_all_costs.csv", root_costs, delimiter=",", fmt="%2f")
+
+        if progress:
+            current_steps = int(self.node_sims[self.root_node].autoscaler.t)
+            pbar.update(max(0, int(self.max_time) - pbar_t_update))
+            pbar.close()
+
+    def get_trace_end(self):
+        return self.t
+
+    def get_result_dict(self):
+        per_node = {node_name: sim.get_result_dict() for node_name, sim in self.node_sims.items()}
+        root_costs = self.node_sims[self.root_node].autoscaler.all_costs
+        return _aggregate_graph_results(per_node, self.node_order) | {
+            'external_arrivals': self.total_external_arrivals,
+            'internal_arrivals': self.total_internal_arrivals,
+            'graph_reject_events': self.total_graph_reject,
+            'graph_cost_avg': float(np.mean(root_costs)) if root_costs else 0,
+            'graph_time_avg_cost': (
+                float(self.graph_cost_time_integral / self.t) if self.t > 0 else 0
+            ),
+            'simulated_time': self.get_trace_end(),
+        }
+
+
 # ======================================================================
 # Experiment runner
 # ======================================================================
@@ -919,6 +1291,73 @@ def run_single_experiment(config, seed, run_idx, total_runs, base_log_dir,
         json.dump(results, f, indent=2)
 
     return results
+
+
+def run_graph_experiment(config, node_order, transition_matrix, seed, run_idx,
+                         total_runs, base_log_dir, theta_init, k_gamma=None):
+    """Run one DAG workflow experiment in a shared cluster."""
+    theta_str = '_'.join(str(x) for x in theta_init)
+    run_log_dir = os.path.join(base_log_dir, f"theta_{theta_str}", f"graph_run_{run_idx + 1}_seed_{seed}")
+    os.makedirs(run_log_dir, exist_ok=True)
+
+    run_config = {
+        'run_index': run_idx + 1,
+        'seed': seed,
+        'theta_init': theta_init,
+        'k_gamma': convert_to_serializable(k_gamma if k_gamma is not None else config.get('k_gamma', [1, 1, 1])),
+        'arrival_rate': config['arrival_rate'],
+        'max_concurrency': config['max_concurrency'],
+        'node_order': node_order,
+        'transition_matrix': transition_matrix,
+    }
+    with open(os.path.join(run_log_dir, 'config.json'), 'w') as f:
+        json.dump(convert_to_serializable(run_config), f, indent=2)
+
+    print(f"\n{'=' * 80}")
+    print(f"Starting Graph Run {run_idx + 1}/{total_runs} | seed={seed} | theta_init={theta_init}")
+    print(f"arrival_rate={config['arrival_rate']:.4f} | max_concurrency={config['max_concurrency']}")
+    print(f"root={node_order[0]} | nodes={node_order}")
+    print(f"Log directory: {run_log_dir}")
+    print(f"{'=' * 80}\n")
+
+    start_time = time.time()
+    random.seed(seed)
+    np.random.seed(seed)
+
+    sim = GraphServerlessSimulator(
+        config=config,
+        node_order=node_order,
+        transition_matrix=transition_matrix,
+        seed=seed,
+        run_idx=run_idx,
+        total_runs=total_runs,
+        base_log_dir=run_log_dir,
+        theta_init=theta_init,
+        k_gamma=k_gamma,
+    )
+    sim.generate_trace(progress=True)
+
+    wall_clock_time = time.time() - start_time
+    results = sim.get_result_dict()
+    results['seed'] = seed
+    results['run_index'] = run_idx + 1
+    results['theta_init'] = theta_init
+    results['wall_clock_time_seconds'] = wall_clock_time
+
+    with open(os.path.join(run_log_dir, 'results.json'), 'w') as f:
+        json.dump(convert_to_serializable(results), f, indent=2)
+
+    print(f"\nResults for Graph Run {run_idx + 1}:")
+    print(f"External arrivals: {results['external_arrivals']}")
+    print(f"Internal arrivals: {results['internal_arrivals']}")
+    print(f"Graph requests: {results['graph_reqs_total']}")
+    print(f"Graph average cost: {results['graph_cost_avg']:.4f}")
+    print(f"Graph time-average cost: {results['graph_time_avg_cost']:.4f}")
+    print(f"Graph cold-start probability: {results['graph_prob_cold']:.4f}")
+    print(f"Graph rejection probability: {results['graph_prob_reject']:.4f}")
+    print(f"Execution Time: {wall_clock_time:.2f}s ({wall_clock_time / 60:.2f}min)")
+
+    return results
     
 # def run_single_experiment(config, seed, run_idx, total_runs, base_log_dir):
 #     """Run a single vectorial NSGD experiment."""
@@ -1024,6 +1463,7 @@ def load_dag_graph(dag_path, log_path=None):
     import matplotlib.pyplot as plt
     G = nx.DiGraph()
     for node, props in dag.items():
+        G.add_node(node)
         for idx, next_node in enumerate(props["next"]):
             prob = props["transition_probability"][idx]
             G.add_edge(node, next_node, weight=prob)
@@ -1032,7 +1472,8 @@ def load_dag_graph(dag_path, log_path=None):
     nx.draw(G, pos, with_labels=True, node_color='lightblue', node_size=2000, font_size=10)
     edge_labels = nx.get_edge_attributes(G, 'weight')
     nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
-    plt.savefig(f"{log_path}/dag_graph.png", bbox_inches='tight')
+    if log_path is not None:
+        plt.savefig(f"{log_path}/dag_graph.png", bbox_inches='tight')
     plt.close()
 
     # Topological sort: parents before children
@@ -1099,91 +1540,88 @@ def run_experiments_from_config(config_path, dag_path=None):
         json.dump(config, f, indent=2)
 
 
-    
-    print("Loadin Dag graph from : {dag_path}")
-    if dag_path is not None:
-        tp_sort, matrix = load_dag_graph(dag_path, log_path=base_log_dir)
+    if dag_path is None:
+        raise ValueError("Graph simulation requires a DAG file. Pass --dag path/to/DAG.json")
+
+    print(f"Loading DAG graph from: {dag_path}")
+    tp_sort, matrix = load_dag_graph(dag_path, log_path=base_log_dir)
 
     seeds = config.get('seeds', [1])
     theta_list = config['theta']
 
-    # Create base log directory
-    
-    arrival_rate = config['nodes'][tp_sort[0]]['arrival_rate']
-    arrival_rates = np.array([arrival_rate])
+    missing_nodes = [node for node in tp_sort if node not in config.get('nodes', {})]
+    if missing_nodes:
+        raise KeyError(f"These DAG nodes are missing from config['nodes']: {missing_nodes}")
+
+    # Expected arrival rates are kept for logging only. Runtime routing is event-based.
+    expected_arrival_rates = np.zeros(len(tp_sort))
+    expected_arrival_rates[0] = config["arrival_rate"]
     for i in range(1, len(tp_sort)):
-        arrival_rates = np.append(arrival_rates, np.sum([arrival_rates[j] * matrix[j, i] for j in range(i)]))
-    print(arrival_rates)
-    config['arrival_rates'] = arrival_rates  # Update config with final node's arrival rate for logging  
+        expected_arrival_rates[i] = np.sum([expected_arrival_rates[j] * matrix[j, i] for j in range(i)])
+
+    config['arrival_rates'] = expected_arrival_rates
     config["tp_sort"] = tp_sort
     config["transition_matrix"] = matrix
-    print(config["arrival_rates"])
-    print(config["tp_sort"])
-    print(config["transition_matrix"])
+    print(f"Expected per-node arrival rates: {expected_arrival_rates}")
+    print(f"Topological order: {tp_sort}")
+    print(f"Transition matrix:\n{matrix}")
     print(f"Experiment will run with the following seeds: {seeds}")
-    #TODO
-    # we need to adapt the code to run graph like application 
-    # the important part is when calculating cost function we need to consider the cost of all nodes in the graph.
-    
-    #The simulation is not suppose to use the arival rate for each node seperatley. What the simulation must do is to use the arrival rate of the first node in the graph and then when a request is served by the first node it will be forwarded to the next node in the graph according to the transition matrix (using a random number to determine which way to go base on the porbability). This way we can simulate the whole graph and get the results for each node as well as the overall results for the graph. The important part that these are all happening in the same cluster so the maximum number of max_concurrency is shared across all nodes meaning that when it reaches to the max concurrency the next request will be rejected regardless of which node it is going to (based on the algorithm that is being used in the current code when maximum concurrency is reached).
-    
-   
 
-        
-    
+    all_results = []
+    exp_per_run = config.get('exp_per_run', 1)
+    total_runs = len(theta_list) * len(seeds) * exp_per_run
+    experiment_start = time.time()
+    k_gamma_per_theta = config.get('k_gamma_per_theta', None)
 
-    # all_results = []
-    # exp_per_run = config.get('exp_per_run', 1)
-    # total_runs = len(theta_list) * len(seeds) * exp_per_run
-    # experiment_start = time.time()
+    run_idx = 0
+    for ti, theta_init in enumerate(theta_list):
+        k_gamma = config.get('k_gamma', [1, 1, 1])
+        if k_gamma_per_theta is not None and ti < len(k_gamma_per_theta):
+            k_gamma = k_gamma_per_theta[ti]
 
-    # # Per-theta k_gamma override: k_gamma_per_theta[i] applies to theta[i]
-    # k_gamma_per_theta = config.get('k_gamma_per_theta', None)
+        for _ in range(exp_per_run):
+            for seed in seeds:
+                try:
+                    results = run_graph_experiment(
+                        config=config,
+                        node_order=tp_sort,
+                        transition_matrix=matrix,
+                        seed=seed,
+                        run_idx=run_idx,
+                        total_runs=total_runs,
+                        base_log_dir=base_log_dir,
+                        theta_init=theta_init,
+                        k_gamma=k_gamma,
+                    )
+                    all_results.append(results)
+                except Exception as e:
+                    print(f"\nError in graph run {run_idx + 1} with seed {seed}, theta {theta_init}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                run_idx += 1
 
-    # run_idx = 0
-    # for ti, theta_init in enumerate(theta_list):
-    #     theta_config = dict(config)
-    #     theta_config['theta'] = [theta_init]
+    experiment_end = time.time()
+    total_experiment_time = experiment_end - experiment_start
 
-    #     # Override k_gamma if per-theta values are provided
-    #     if k_gamma_per_theta is not None and ti < len(k_gamma_per_theta):
-    #         theta_config['k_gamma'] = k_gamma_per_theta[ti]
+    print(f"\n{'=' * 80}")
+    print("GRAPH EXPERIMENT SUMMARY")
+    print(f"{'=' * 80}")
+    print(f"Total runs completed: {len(all_results)}/{total_runs}")
+    print(f"Total time: {total_experiment_time:.2f}s ({total_experiment_time / 60:.2f}min)")
 
-    #     theta_str = '_'.join(str(x) for x in theta_init)
-    #     theta_log_dir = os.path.join(base_log_dir, f"theta_{theta_str}")
-    #     if not os.path.exists(theta_log_dir):
-    #         os.makedirs(theta_log_dir)
+    aggregated = {'total_runs': len(all_results), 'time_seconds': total_experiment_time, 'runs': all_results}
+    with open(os.path.join(base_log_dir, 'aggregated_results.json'), 'w') as f:
+        json.dump(convert_to_serializable(aggregated), f, indent=2)
 
-    #     for _ in range(exp_per_run):
-    #         for seed in seeds:
-    #             try:
-    #                 results = run_single_experiment(theta_config, seed, run_idx, total_runs, theta_log_dir)
-    #                 results['theta_init'] = theta_init
-    #                 all_results.append(results)
-    #             except Exception as e:
-    #                 print(f"\nError in run {run_idx + 1} with seed {seed}, theta {theta_init}: {e}")
-    #                 import traceback
-    #                 traceback.print_exc()
-    #             run_idx += 1
+    if all_results:
+        flat_results = []
+        for result in all_results:
+            row = {k: v for k, v in result.items() if k != 'per_node'}
+            flat_results.append(convert_to_serializable(row))
+        df = pd.DataFrame(flat_results)
+        df.to_csv(os.path.join(base_log_dir, 'all_runs_summary.csv'), index=False)
 
-    # experiment_end = time.time()
-    # total_experiment_time = experiment_end - experiment_start
-
-    # print(f"\n{'=' * 80}")
-    # print("EXPERIMENT SUMMARY")
-    # print(f"{'=' * 80}")
-    # print(f"Total runs completed: {len(all_results)}/{total_runs}")
-    # print(f"Total time: {total_experiment_time:.2f}s ({total_experiment_time / 60:.2f}min)")
-
-    # aggregated = {'total_runs': len(all_results), 'time_seconds': total_experiment_time, 'runs': all_results}
-    # with open(os.path.join(base_log_dir, 'aggregated_results.json'), 'w') as f:
-    #     json.dump(aggregated, f, indent=2)
-
-    # if all_results:
-    #     df = pd.DataFrame(all_results)
-    #     df.to_csv(os.path.join(base_log_dir, 'all_runs_summary.csv'), index=False)
-
-    # print(f"\nAll results saved to: {base_log_dir}")
+    print(f"\nAll results saved to: {base_log_dir}")
 
 
 if __name__ == "__main__":

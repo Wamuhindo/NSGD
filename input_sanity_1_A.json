@@ -1,0 +1,32 @@
+{
+  "description": "Sanity baseline: single-node A. Aggregate target mean warm service=1, cold start=10, cold service=0.01, expiration=100. Fixed theta and huge concurrency.",
+  "experiment_name": "sanity_1_A",
+  "arrival_rate": 10.0,
+  "nodes": {
+    "A": {
+      "warm_service": {"rate": 1.0, "type": "Exponential"},
+      "cold_service": {"rate": 100.0, "type": "Exponential"},
+      "cold_start": {"rate": 0.1, "type": "Exponential"},
+      "expiration": {"rate": 0.01, "type": "Exponential"}
+    }
+  },
+  "optimization": {"type": "sgd"},
+  "theta": [[1, 1, 10]],
+  "tau": 1000,
+  "max_concurrency": 100000,
+  "max_time": 1000000,
+  "stop_by_simulated_time": true,
+  "max_simulated_time": 2500,
+  "log_dir": "logs/",
+  "K": 2,
+  "seeds": [1],
+  "k_delta": 1,
+  "k_gamma": [0, 0, 0],
+  "prtb": [[-0.5, 0.5], [-0.5, 0.5], [-1, 1]],
+  "learn_mask": [false, false, false],
+  "accumulate_cost": true,
+  "K_exp": 1000,
+  "gamma_min": 1,
+  "theta_stock_min": 0,
+  "theta_idle_min": 0
+}
