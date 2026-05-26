@@ -239,6 +239,7 @@ def scalar_or_list(value: Any) -> list[Any]:
 def normalize_sweeps(raw_sweeps: dict[str, Any]) -> dict[str, list[Any]]:
     normalized: dict[str, list[Any]] = {}
     for raw_name, raw_values in raw_sweeps.items():
+        raw_name = raw_name.strip()
         name = SWEEP_ALIASES.get(raw_name, raw_name)
         values = scalar_or_list(raw_values)
         if not values:
@@ -496,6 +497,10 @@ def run_one_experiment(
     df["stdout_log"] = str(stdout_path)
     for key, value in generated["combo"].items():
         df[key] = json.dumps(value) if isinstance(value, (dict, list)) else value
+    for key in sorted(CONFIG_PARAM_NAMES):
+        if key not in df.columns and key in config:
+            value = config[key]
+            df[key] = json.dumps(value) if isinstance(value, (dict, list)) else value
     return df
 
 
@@ -644,7 +649,7 @@ def plot_3d(df: pd.DataFrame, metric: str, param: str, output_dir: Path, suffix:
     else:
         plot_df["_param_x"] = plot_df[param].map(param_positions)
 
-    fig = plt.figure(figsize=(9, 7))
+    fig = plt.figure(figsize=(10, 7.5), constrained_layout=True)
     ax = fig.add_subplot(111, projection="3d")
 
     pivot = plot_df.pivot(index="N", columns="_param_x", values=metric).sort_index()
@@ -664,8 +669,6 @@ def plot_3d(df: pd.DataFrame, metric: str, param: str, output_dir: Path, suffix:
     if not numeric_param:
         ax.set_xticks(list(param_positions.values()))
         ax.set_xticklabels([str(value) for value in param_values], rotation=25, ha="right")
-    fig.tight_layout()
-
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / f"plot_3d_{metric}_N_{param}{suffix}.png"
     fig.savefig(path, dpi=170)

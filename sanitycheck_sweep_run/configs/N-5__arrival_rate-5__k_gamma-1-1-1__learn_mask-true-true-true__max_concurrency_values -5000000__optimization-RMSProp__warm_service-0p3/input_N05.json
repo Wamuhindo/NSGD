@@ -1,0 +1,148 @@
+{
+  "description": "Sanity-check sweep from JSON config | N-5__arrival_rate-5__k_gamma-1-1-1__learn_mask-true-true-true__max_concurrency_values -5000000__optimization-RMSProp__warm_service-0p3",
+  "experiment_name": "sanitycheck_sweep_json_N-5__arrival_rate-5__k_gamma-1-1-1__learn_mask-true-true-true__max_concurrency_values -5000000__optimization-RMSProp__warm_service-0p3",
+  "arrival_rate": 5,
+  "optimization": {
+    "type": "RMSProp"
+  },
+  "theta": [
+    [
+      0.3333333333333333,
+      0.3333333333333333,
+      30
+    ]
+  ],
+  "tau": 100,
+  "max_concurrency": 50,
+  "max_time": 100000,
+  "log_dir": "/opt/Projects/Soft2/NSGD/sanitycheck_sweep_run/logs",
+  "K": 2,
+  "seeds": [
+    1
+  ],
+  "k_delta": 1,
+  "k_gamma": [
+    1,
+    1,
+    1
+  ],
+  "prtb": [
+    [
+      -0.5,
+      0.5
+    ],
+    [
+      -0.5,
+      0.5
+    ],
+    [
+      -1,
+      1
+    ]
+  ],
+  "learn_mask": [
+    true,
+    true,
+    true
+  ],
+  "accumulate_cost": true,
+  "K_exp": 1000,
+  "gamma_min": 1,
+  "theta_stock_min": 0,
+  "theta_idle_min": 0,
+  "stop_by_simulated_time": false,
+  "max_simulated_time": 500,
+  "exp_per_run": 1,
+  "nodes": {
+    "A1": {
+      "warm_service": {
+        "rate": 1.5,
+        "type": "Exponential"
+      },
+      "cold_service": {
+        "rate": 500.0,
+        "type": "Exponential"
+      },
+      "cold_start": {
+        "rate": 0.5,
+        "type": "Exponential"
+      },
+      "expiration": {
+        "rate": 0.05,
+        "type": "Exponential"
+      }
+    },
+    "A2": {
+      "warm_service": {
+        "rate": 1.5,
+        "type": "Exponential"
+      },
+      "cold_service": {
+        "rate": 500.0,
+        "type": "Exponential"
+      },
+      "cold_start": {
+        "rate": 0.5,
+        "type": "Exponential"
+      },
+      "expiration": {
+        "rate": 0.05,
+        "type": "Exponential"
+      }
+    },
+    "A3": {
+      "warm_service": {
+        "rate": 1.5,
+        "type": "Exponential"
+      },
+      "cold_service": {
+        "rate": 500.0,
+        "type": "Exponential"
+      },
+      "cold_start": {
+        "rate": 0.5,
+        "type": "Exponential"
+      },
+      "expiration": {
+        "rate": 0.05,
+        "type": "Exponential"
+      }
+    },
+    "A4": {
+      "warm_service": {
+        "rate": 1.5,
+        "type": "Exponential"
+      },
+      "cold_service": {
+        "rate": 500.0,
+        "type": "Exponential"
+      },
+      "cold_start": {
+        "rate": 0.5,
+        "type": "Exponential"
+      },
+      "expiration": {
+        "rate": 0.05,
+        "type": "Exponential"
+      }
+    },
+    "A5": {
+      "warm_service": {
+        "rate": 1.5,
+        "type": "Exponential"
+      },
+      "cold_service": {
+        "rate": 500.0,
+        "type": "Exponential"
+      },
+      "cold_start": {
+        "rate": 0.5,
+        "type": "Exponential"
+      },
+      "expiration": {
+        "rate": 0.05,
+        "type": "Exponential"
+      }
+    }
+  }
+}

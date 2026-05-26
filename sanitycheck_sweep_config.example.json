@@ -81,15 +81,13 @@
     ],
     "arrival_rate_values": [
       5,
-      10,
-      20
+      10
     ],
     "warm_service_values": [
-      0.5,
-      0.3
+      0.5
     ],
     "optimization_values": [
-      "adam", "RMSProp"
+      "adam"
     ],
     "learn_mask_values": [
       [
@@ -110,8 +108,9 @@
         1
       ]
     ],
-    "max_concurrency_values ": [
-      50, 5000000
+    "max_concurrency_values": [
+      50,
+      5000000
     ]
   },
   "z_metrics": [
@@ -121,6 +120,8 @@
   ],
   "plot_by_parameters": [
     "arrival_rate",
-    "warm_service", "max_concurrency", "optimization" 
+    "warm_service",
+    "max_concurrency",
+    "optimization"
   ]
 }
