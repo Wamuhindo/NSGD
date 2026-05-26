@@ -12,31 +12,30 @@ import matplotlib.pyplot as plt
 ROOT = Path(__file__).resolve().parent
 PYTHON = ROOT / ".venv" / "bin" / "python"
 SIMULATE = ROOT / "AutoscalerFaasScalarVectorial" / "simulate.py"
-SANITY_DIR = ROOT / "sanitycheck"
-FIG_DIR = ROOT / "results_figures"
 
-DEFAULT_MAX_LENGTH = 10
+DEFAULT_MAX_LENGTH = 5
 
-BASE_ARRIVAL_RATE = 10.0
-BASE_WARM_SERVICE_RATE = 1.0
+MAX_TIME = 200000
+BASE_ARRIVAL_RATE = 10
+BASE_WARM_SERVICE_RATE = 0.5
 BASE_COLD_SERVICE_RATE = 100.0
 BASE_COLD_START_RATE = 0.1
 BASE_EXPIRATION_RATE = 0.01
-MAX_CONCURRENCY = 100000
-TAU = 1000
+MAX_CONCURRENCY = 50
+TAU = 100
 K = 2
 SEEDS = [1]
 
 SCENARIOS = {
     "fixed_external": {
         "description": "Same external simulated-time horizon for every graph length.",
-        "max_time": 500000,
+        "max_time": MAX_TIME,
         "stop_by_simulated_time": True,
         "max_simulated_time": 500,
     },
     "event_budget": {
         "description": "Same event/update budget for every graph length; external arrivals fall as graph length grows.",
-        "max_time": 50000,
+        "max_time": MAX_TIME,
         "stop_by_simulated_time": False,
     },
 }
@@ -47,6 +46,12 @@ GRAPH_RESULT_FIELDNAMES = [
     "graph",
     "graph_time_avg_cost",
     "graph_event_avg_cost",
+    "graph_response_time_count",
+    "graph_response_time_avg",
+    "graph_response_time_p50",
+    "graph_response_time_p95",
+    "graph_response_time_p99",
+    "graph_response_time_max",
     "graph_reqs_total",
     "graph_reqs_cold",
     "graph_reqs_warm",
@@ -66,6 +71,12 @@ GRAPH_RESULT_FIELDNAMES = [
     "graph_inst_init_free_count_avg",
     "graph_inst_init_reserved_count_avg",
     "graph_inst_queued_jobs_count_avg",
+    "graph_response_time_warm_count",
+    "graph_response_time_warm_avg",
+    "graph_response_time_cold_count",
+    "graph_response_time_cold_avg",
+    "graph_response_time_queued_count",
+    "graph_response_time_queued_avg",
     "simulated_time",
     "warm_service_rate",
     "warm_service_mean_time",
@@ -86,6 +97,14 @@ GRAPH_RESULT_FIELDNAMES = [
 GRAPH_PLOT_SPECS = [
     ("graph_time_avg_cost", "Graph time-average cost", "time_avg_cost"),
     ("graph_event_avg_cost", "Graph event-average cost", "event_avg_cost"),
+    ("graph_response_time_avg", "Graph average response time", "response_time_avg"),
+    ("graph_response_time_p50", "Graph p50 response time", "response_time_p50"),
+    ("graph_response_time_p95", "Graph p95 response time", "response_time_p95"),
+    ("graph_response_time_p99", "Graph p99 response time", "response_time_p99"),
+    ("graph_response_time_max", "Graph max response time", "response_time_max"),
+    ("graph_response_time_warm_avg", "Warm average response time", "response_time_warm_avg"),
+    ("graph_response_time_cold_avg", "Cold average response time", "response_time_cold_avg"),
+    ("graph_response_time_queued_avg", "Queued average response time", "response_time_queued_avg"),
     ("graph_reqs_total", "Graph total requests", "requests_total"),
     ("graph_reqs_warm", "Warm requests", "requests_warm"),
     ("graph_reqs_cold", "Cold requests", "requests_cold"),
@@ -137,6 +156,14 @@ NODE_HEATMAP_SPECS = [
     ("inst_init_free_count_avg", "Node average init-free instances", "node_inst_init_free_count_avg"),
     ("inst_init_reserved_count_avg", "Node average init-reserved instances", "node_inst_init_reserved_count_avg"),
     ("inst_queued_jobs_count_avg", "Node average queued jobs", "node_inst_queued_jobs_count_avg"),
+    ("response_time_avg", "Node average response time", "node_response_time_avg"),
+    ("response_time_p50", "Node p50 response time", "node_response_time_p50"),
+    ("response_time_p95", "Node p95 response time", "node_response_time_p95"),
+    ("response_time_p99", "Node p99 response time", "node_response_time_p99"),
+    ("response_time_max", "Node max response time", "node_response_time_max"),
+    ("response_time_warm_avg", "Node warm average response time", "node_response_time_warm_avg"),
+    ("response_time_cold_avg", "Node cold average response time", "node_response_time_cold_avg"),
+    ("response_time_queued_avg", "Node queued average response time", "node_response_time_queued_avg"),
     ("warm_service_rate", "Node warm service rate", "node_warm_service_rate"),
     ("warm_service_mean_time", "Node warm service mean time", "node_warm_service_mean_time"),
     ("cold_service_rate", "Node cold service rate", "node_cold_service_rate"),
@@ -193,7 +220,12 @@ def node_config(length):
     }
 
 
-def build_input(scenario_name, scenario, length, max_concurrency=MAX_CONCURRENCY):
+def output_root(output_prefix):
+    path = Path(output_prefix)
+    return path if path.is_absolute() else ROOT / path
+
+
+def build_input(scenario_name, scenario, length, log_dir, max_concurrency=MAX_CONCURRENCY):
     nodes = {f"A{i}": node_config(length) for i in range(1, length + 1)}
     theta_stock = 1.0 / length
     theta_exp = 10 * length
@@ -212,13 +244,13 @@ def build_input(scenario_name, scenario, length, max_concurrency=MAX_CONCURRENCY
         "tau": TAU,
         "max_concurrency": max_concurrency,
         "max_time": scenario["max_time"],
-        "log_dir": "logs/",
+        "log_dir": str(log_dir),
         "K": K,
         "seeds": SEEDS,
         "k_delta": 1,
-        "k_gamma": [0, 0, 0],
+        "k_gamma": [1,1, 1],
         "prtb": [[-0.5, 0.5], [-0.5, 0.5], [-1, 1]],
-        "learn_mask": [False, False, False],
+        "learn_mask": [True, True, True],
         "accumulate_cost": True,
         "K_exp": 1000,
         "gamma_min": 1,
@@ -238,26 +270,28 @@ def write_json(path, payload):
         f.write("\n")
 
 
-def generate_configs(selected_scenarios, chain_lengths, max_concurrency=MAX_CONCURRENCY):
+def generate_configs(selected_scenarios, chain_lengths, output_dir, max_concurrency=MAX_CONCURRENCY):
     generated = []
+    config_dir = output_dir / "configs"
+    log_dir = output_dir / "logs"
     for scenario_name in selected_scenarios:
         scenario = SCENARIOS[scenario_name]
-        dag_dir = SANITY_DIR / scenario_name / "dags"
-        input_dir = SANITY_DIR / scenario_name / "inputs"
+        dag_dir = config_dir / scenario_name / "dags"
+        input_dir = config_dir / scenario_name / "inputs"
         for length in chain_lengths:
             dag_path = dag_dir / f"DAG_chain_L{length:02d}.json"
             input_path = input_dir / f"input_chain_L{length:02d}.json"
             write_json(dag_path, build_dag(length))
-            write_json(input_path, build_input(scenario_name, scenario, length, max_concurrency))
+            write_json(input_path, build_input(scenario_name, scenario, length, log_dir, max_concurrency))
             generated.append((scenario_name, length, input_path, dag_path))
     return generated
 
 
-def find_latest_run_dir(experiment_name, arrival_rate):
+def find_latest_run_dir(experiment_name, arrival_rate, log_dir):
     pattern = f"{experiment_name}_arr{arrival_rate}_*"
-    candidates = sorted((ROOT / "logs").glob(pattern), key=lambda p: p.stat().st_mtime)
+    candidates = sorted(log_dir.glob(pattern), key=lambda p: p.stat().st_mtime)
     if not candidates:
-        raise FileNotFoundError(f"No log directory found for logs/{pattern}")
+        raise FileNotFoundError(f"No log directory found for {log_dir / pattern}")
     return candidates[-1]
 
 
@@ -351,6 +385,42 @@ def result_graph_metrics(metrics_row, result):
         "graph_event_avg_cost": graph_value_from_metrics(
             metrics_row, result, "graph_event_avg_cost", "graph_cost_avg"
         ),
+        "graph_response_time_count": graph_value_from_metrics(
+            metrics_row, result, "response_time_count", "graph_response_time_count", int, 0
+        ),
+        "graph_response_time_avg": graph_value_from_metrics(
+            metrics_row, result, "response_time_avg", "graph_response_time_avg"
+        ),
+        "graph_response_time_p50": graph_value_from_metrics(
+            metrics_row, result, "response_time_p50", "graph_response_time_p50"
+        ),
+        "graph_response_time_p95": graph_value_from_metrics(
+            metrics_row, result, "response_time_p95", "graph_response_time_p95"
+        ),
+        "graph_response_time_p99": graph_value_from_metrics(
+            metrics_row, result, "response_time_p99", "graph_response_time_p99"
+        ),
+        "graph_response_time_max": graph_value_from_metrics(
+            metrics_row, result, "response_time_max", "graph_response_time_max"
+        ),
+        "graph_response_time_warm_count": graph_value_from_metrics(
+            metrics_row, result, "response_time_warm_count", None, int, 0
+        ),
+        "graph_response_time_warm_avg": graph_value_from_metrics(
+            metrics_row, result, "response_time_warm_avg"
+        ),
+        "graph_response_time_cold_count": graph_value_from_metrics(
+            metrics_row, result, "response_time_cold_count", None, int, 0
+        ),
+        "graph_response_time_cold_avg": graph_value_from_metrics(
+            metrics_row, result, "response_time_cold_avg"
+        ),
+        "graph_response_time_queued_count": graph_value_from_metrics(
+            metrics_row, result, "response_time_queued_count", None, int, 0
+        ),
+        "graph_response_time_queued_avg": graph_value_from_metrics(
+            metrics_row, result, "response_time_queued_avg"
+        ),
         "graph_reqs_total": graph_reqs_total,
         "graph_reqs_cold": graph_reqs_cold,
         "graph_reqs_warm": graph_reqs_warm,
@@ -407,11 +477,11 @@ def result_graph_metrics(metrics_row, result):
     return values
 
 
-def run_experiment(python, scenario_name, length, input_path, dag_path):
+def run_experiment(python, scenario_name, length, input_path, dag_path, output_dir):
     with input_path.open() as f:
         config = json.load(f)
 
-    run_output_dir = FIG_DIR / "run_logs"
+    run_output_dir = output_dir / "logs" / "stdout"
     run_output_dir.mkdir(parents=True, exist_ok=True)
     stdout_path = run_output_dir / f"{scenario_name}_L{length:02d}.log"
 
@@ -434,7 +504,9 @@ def run_experiment(python, scenario_name, length, input_path, dag_path):
             stderr=subprocess.STDOUT,
         )
 
-    run_dir = find_latest_run_dir(config["experiment_name"], config["arrival_rate"])
+    run_dir = find_latest_run_dir(
+        config["experiment_name"], config["arrival_rate"], Path(config["log_dir"])
+    )
     metrics_row = load_first_graph_metrics_row(run_dir)
     result = load_first_result(run_dir) if metrics_row is None else None
     row = {
@@ -448,9 +520,9 @@ def run_experiment(python, scenario_name, length, input_path, dag_path):
     return row
 
 
-def save_results_csv(rows, output_prefix):
-    FIG_DIR.mkdir(parents=True, exist_ok=True)
-    csv_path = FIG_DIR / f"{output_prefix}_results.csv"
+def save_results_csv(rows, output_prefix, output_dir):
+    output_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = output_dir / f"{output_prefix}_results.csv"
     with csv_path.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=GRAPH_RESULT_FIELDNAMES, extrasaction="ignore")
         writer.writeheader()
@@ -458,7 +530,7 @@ def save_results_csv(rows, output_prefix):
     return csv_path
 
 
-def plot_metric(rows, selected_scenarios, chain_lengths, metric, ylabel, output_name, output_dir=FIG_DIR):
+def plot_metric(rows, selected_scenarios, chain_lengths, metric, ylabel, output_name, output_dir):
     output_dir.mkdir(parents=True, exist_ok=True)
     plt.figure(figsize=(10, 5))
     for scenario_name in selected_scenarios:
@@ -501,7 +573,7 @@ def metric_float(row, key):
         return None
 
 
-def save_combined_metrics_csv(rows, output_prefix):
+def save_combined_metrics_csv(rows, output_prefix, output_dir):
     metrics_rows = []
     for row in rows:
         run_dir = Path(row["run_dir"])
@@ -531,7 +603,8 @@ def save_combined_metrics_csv(rows, output_prefix):
             if key not in fieldnames:
                 fieldnames.append(key)
 
-    csv_path = FIG_DIR / f"{output_prefix}_metrics.csv"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = output_dir / f"{output_prefix}_metrics.csv"
     with csv_path.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
@@ -539,8 +612,8 @@ def save_combined_metrics_csv(rows, output_prefix):
     return csv_path, metrics_rows
 
 
-def plot_graph_metrics(rows, selected_scenarios, chain_lengths, output_prefix):
-    plot_dir = FIG_DIR / f"{output_prefix}_plots" / "graph"
+def plot_graph_metrics(rows, selected_scenarios, chain_lengths, output_prefix, output_dir):
+    plot_dir = output_dir / "plots" / "graph"
     figures = []
     for metric, ylabel, suffix in GRAPH_PLOT_SPECS:
         if not any(row.get(metric) not in ("", None) for row in rows):
@@ -614,8 +687,8 @@ def plot_node_heatmap(metric_rows, selected_scenarios, chain_lengths, metric, yl
     return figures
 
 
-def plot_node_heatmaps(metric_rows, selected_scenarios, chain_lengths, output_prefix):
-    plot_dir = FIG_DIR / f"{output_prefix}_plots" / "node"
+def plot_node_heatmaps(metric_rows, selected_scenarios, chain_lengths, output_prefix, output_dir):
+    plot_dir = output_dir / "plots" / "node"
     figures = []
     for metric, ylabel, suffix in NODE_HEATMAP_SPECS:
         figures.extend(
@@ -633,18 +706,23 @@ def plot_node_heatmaps(metric_rows, selected_scenarios, chain_lengths, output_pr
 
 
 def relative_path(path):
-    return path.relative_to(ROOT) if path.is_absolute() else path
+    if not path.is_absolute():
+        return path
+    try:
+        return path.relative_to(ROOT)
+    except ValueError:
+        return path
 
 
-def save_metric_report(rows, output_prefix, csv_path, metrics_csv_path, graph_figures, node_figures):
-    report_path = FIG_DIR / f"{output_prefix}_metric_report.md"
+def save_metric_report(rows, output_prefix, output_dir, csv_path, metrics_csv_path, graph_figures, node_figures):
+    report_path = output_dir / f"{output_prefix}_metric_report.md"
     final_rows = sorted(rows, key=lambda row: (row["scenario"], row["chain_length"]))
     last_row = final_rows[-1] if final_rows else None
 
     lines = [
         "# Sanitycheck Metric Report",
         "",
-        "This report is generated from the run-level CSV outputs. It includes graph-level line plots and node-level heatmaps for request counts, probabilities, instance counts, and configured distribution parameters.",
+        "This report is generated from the run-level CSV outputs. It includes graph-level line plots and node-level heatmaps for response time, request counts, probabilities, instance counts, and configured distribution parameters.",
         "",
         "## Source Data",
         "",
@@ -656,13 +734,14 @@ def save_metric_report(rows, output_prefix, csv_path, metrics_csv_path, graph_fi
         "",
         "## Final Chain-Length Snapshot",
         "",
-        "| scenario | L | time cost | event cost | warm reqs | cold reqs | queued reqs | rejected reqs | p cold | p warm | p queued | p reject |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| scenario | L | time cost | event cost | avg RT | p95 RT | warm reqs | cold reqs | queued reqs | rejected reqs | p cold | p warm | p queued | p reject |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ])
     if last_row:
         lines.append(
             "| {scenario} | {chain_length} | {graph_time_avg_cost:.4f} | "
-            "{graph_event_avg_cost:.4f} | {graph_reqs_warm} | {graph_reqs_cold} | "
+            "{graph_event_avg_cost:.4f} | {graph_response_time_avg:.4f} | "
+            "{graph_response_time_p95:.4f} | {graph_reqs_warm} | {graph_reqs_cold} | "
             "{graph_reqs_queued} | {graph_reqs_reject} | {graph_prob_cold:.4f} | "
             "{graph_prob_warm:.4f} | {graph_prob_queued:.4f} | {graph_prob_reject:.4f} |".format(**last_row)
         )
@@ -672,6 +751,7 @@ def save_metric_report(rows, output_prefix, csv_path, metrics_csv_path, graph_fi
         "## Interpretation",
         "",
         "- Cost alone is not enough: lower resource cost can coincide with higher rejection.",
+        "- Response-time metrics are reported separately from cost, so they describe service quality without changing the optimizer objective.",
         "- Warm, cold, queued, init, and rejection metrics separate service quality from resource usage.",
         "- Node heatmaps show whether graph-level behavior is spread across the chain or concentrated at specific nodes.",
         "- Distribution-rate plots document the configured rates and mean times used to make longer chains comparable.",
@@ -694,18 +774,19 @@ def save_metric_report(rows, output_prefix, csv_path, metrics_csv_path, graph_fi
     return report_path
 
 
-def save_summary(rows, output_prefix):
-    summary_path = FIG_DIR / f"{output_prefix}_summary.md"
+def save_summary(rows, output_prefix, output_dir):
+    summary_path = output_dir / f"{output_prefix}_summary.md"
     lines = [
         "# Sanitycheck Results",
         "",
-        "| scenario | L | time avg cost | event avg cost | external | internal | warm | cold | queued | rejected | p cold | p warm | p queued | p reject |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| scenario | L | time avg cost | event avg cost | avg RT | p95 RT | external | internal | warm | cold | queued | rejected | p cold | p warm | p queued | p reject |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in sorted(rows, key=lambda item: (item["scenario"], item["chain_length"])):
         lines.append(
             "| {scenario} | {chain_length} | {graph_time_avg_cost:.4f} | "
-            "{graph_event_avg_cost:.4f} | {external_arrivals} | {internal_arrivals} | "
+            "{graph_event_avg_cost:.4f} | {graph_response_time_avg:.4f} | "
+            "{graph_response_time_p95:.4f} | {external_arrivals} | {internal_arrivals} | "
             "{graph_reqs_warm} | {graph_reqs_cold} | {graph_reqs_queued} | {graph_reqs_reject} | "
             "{graph_prob_cold:.4f} | {graph_prob_warm:.4f} | {graph_prob_queued:.4f} | "
             "{graph_prob_reject:.4f} |".format(**row)
@@ -727,7 +808,7 @@ def parse_args():
     parser.add_argument(
         "--output-prefix",
         default="sanitycheck",
-        help="Prefix for CSV, summary, and figure filenames in results_figures.",
+        help="Output folder for configs, logs, CSVs, summaries, and figures.",
     )
     parser.add_argument(
         "--max-concurrency",
@@ -743,24 +824,27 @@ def main():
     if args.min_length < 1 or args.max_length < args.min_length:
         raise ValueError("--max-length must be >= --min-length >= 1")
 
+    output_dir = output_root(args.output_prefix)
+    artifact_prefix = output_dir.name
     python = PYTHON if PYTHON.exists() else Path(sys.executable)
     selected_scenarios = args.scenario or list(SCENARIOS.keys())
     chain_lengths = list(range(args.min_length, args.max_length + 1))
-    generated = generate_configs(selected_scenarios, chain_lengths, args.max_concurrency)
+    generated = generate_configs(selected_scenarios, chain_lengths, output_dir, args.max_concurrency)
 
     rows = []
     for scenario_name, length, input_path, dag_path in generated:
-        rows.append(run_experiment(python, scenario_name, length, input_path, dag_path))
+        rows.append(run_experiment(python, scenario_name, length, input_path, dag_path, output_dir))
 
-    csv_path = save_results_csv(rows, args.output_prefix)
-    metrics_csv_path, metric_rows = save_combined_metrics_csv(rows, args.output_prefix)
+    csv_path = save_results_csv(rows, artifact_prefix, output_dir)
+    metrics_csv_path, metric_rows = save_combined_metrics_csv(rows, artifact_prefix, output_dir)
     cost_fig = plot_metric(
         rows,
         selected_scenarios,
         chain_lengths,
         "graph_time_avg_cost",
         "Graph time-average cost",
-        f"{args.output_prefix}_time_avg_cost.png",
+        f"{artifact_prefix}_time_avg_cost.png",
+        output_dir / "plots" / "summary",
     )
     event_cost_fig = plot_metric(
         rows,
@@ -768,7 +852,8 @@ def main():
         chain_lengths,
         "graph_event_avg_cost",
         "Graph event-average cost",
-        f"{args.output_prefix}_event_avg_cost.png",
+        f"{artifact_prefix}_event_avg_cost.png",
+        output_dir / "plots" / "summary",
     )
     external_fig = plot_metric(
         rows,
@@ -776,7 +861,8 @@ def main():
         chain_lengths,
         "external_arrivals",
         "External arrivals",
-        f"{args.output_prefix}_external_arrivals.png",
+        f"{artifact_prefix}_external_arrivals.png",
+        output_dir / "plots" / "summary",
     )
     cold_fig = plot_metric(
         rows,
@@ -784,14 +870,16 @@ def main():
         chain_lengths,
         "graph_prob_cold",
         "Cold-start probability",
-        f"{args.output_prefix}_cold_probability.png",
+        f"{artifact_prefix}_cold_probability.png",
+        output_dir / "plots" / "summary",
     )
-    summary_path = save_summary(rows, args.output_prefix)
-    graph_figures = plot_graph_metrics(rows, selected_scenarios, chain_lengths, args.output_prefix)
-    node_figures = plot_node_heatmaps(metric_rows, selected_scenarios, chain_lengths, args.output_prefix)
+    summary_path = save_summary(rows, artifact_prefix, output_dir)
+    graph_figures = plot_graph_metrics(rows, selected_scenarios, chain_lengths, artifact_prefix, output_dir)
+    node_figures = plot_node_heatmaps(metric_rows, selected_scenarios, chain_lengths, artifact_prefix, output_dir)
     report_path = save_metric_report(
         rows,
-        args.output_prefix,
+        artifact_prefix,
+        output_dir,
         csv_path,
         metrics_csv_path,
         graph_figures,
@@ -799,7 +887,9 @@ def main():
     )
 
     print("\nDone.")
-    print(f"Generated configs: {SANITY_DIR}")
+    print(f"Output folder: {output_dir}")
+    print(f"Generated configs: {output_dir / 'configs'}")
+    print(f"Simulator logs: {output_dir / 'logs'}")
     print(f"CSV: {csv_path}")
     if metrics_csv_path:
         print(f"Metrics CSV: {metrics_csv_path}")

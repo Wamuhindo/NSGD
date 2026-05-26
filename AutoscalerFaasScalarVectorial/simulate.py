@@ -234,6 +234,13 @@ class ServerlessSimulator:
         self.total_queued_jobs_count = 0
         self.total_requests_log = []
         self.served_requests_log = []
+        self.completed_requests_log = []
+        self.response_times = []
+        self.response_times_by_type = {
+            "warm": [],
+            "cold": [],
+            "queued": [],
+        }
         self.last_t = 0
         self.t = 0
         self.total_finished = 0
@@ -290,7 +297,7 @@ class ServerlessSimulator:
     # Arrival handlers (Policy 1 from Autoscaling.pdf)
     # ------------------------------------------------------------------
 
-    def cold_start_arrival(self, t, theta_stock=1):
+    def cold_start_arrival(self, t, theta_stock=1, workflow_start_time=None):
         """Handle arrival when no idle-on or init-free functions are available.
 
         Policy 1, lines 2-6: spawn 1 init-reserved + pi_theta_stock init-free.
@@ -309,6 +316,7 @@ class ServerlessSimulator:
         self.init_reserved_count += 1
         new_server = FunctionInstance(t, self.cold_service_process, self.warm_service_process,
                                      self.expiration_process, self.cold_start_process)
+        new_server.start_request(t, "cold", workflow_start_time)
         new_server.make_Init_Reserved()
         self.servers.append(new_server)
         self.server_count += 1
@@ -359,7 +367,7 @@ class ServerlessSimulator:
         idx = np.argmax(creation_times)
         return init_free_instances[idx]
 
-    def warm_start_arrival(self, t, theta_stock, theta_idle):
+    def warm_start_arrival(self, t, theta_stock, theta_idle, workflow_start_time=None):
         """Handle arrival when idle-on functions are available.
 
         Policy 1, lines 7-12: serve with idle-on; if #idle-on drops below
@@ -375,6 +383,7 @@ class ServerlessSimulator:
         self.hist_req_warm_idxs.append(len(self.hist_times) - 1)
         instance = self.schedule_warm_instance(t)
         was_idle = instance.is_idle_on()
+        instance.start_request(t, "warm", workflow_start_time)
         instance.arrival_transition(t)
         self.total_warm_count += 1
         if was_idle:
@@ -388,7 +397,7 @@ class ServerlessSimulator:
                     self.missed_update += 1
                 self.start_init_free_servers(t, to_start)
 
-    def init_free_arrival(self, t, theta_stock):
+    def init_free_arrival(self, t, theta_stock, workflow_start_time=None):
         """Handle arrival when init-free functions are available but no idle-on.
 
         The request is queued on an init-free instance (reclassified as init-reserved).
@@ -404,6 +413,7 @@ class ServerlessSimulator:
 
         self.hist_req_queued_idxs.append(len(self.hist_times) - 1)
         instance = self.schedule_init_free_instance(t)
+        instance.start_request(t, "queued", workflow_start_time)
         instance.arrival_transition(t)
         self.init_free_count -= 1
         self.init_free_booked_count += 1
@@ -456,6 +466,19 @@ class ServerlessSimulator:
             return np.mean(resource_usage, axis=0)
         return np.zeros(4)
 
+    def record_completed_request(self, instance, t):
+        response = instance.complete_request(t)
+        if response is None:
+            return None
+        response_time = response["response_time"]
+        self.completed_requests_log.append(response)
+        self.response_times.append(response_time)
+        request_type = response["request_type"]
+        if request_type not in self.response_times_by_type:
+            self.response_times_by_type[request_type] = []
+        self.response_times_by_type[request_type].append(response_time)
+        return response
+
     # ------------------------------------------------------------------
     # Statistics
     # ------------------------------------------------------------------
@@ -483,6 +506,45 @@ class ServerlessSimulator:
 
     def get_average_server_queued_jobs_count(self):
         return (self.hist_server_queued_jobs_count * self.time_lengths).sum() / self.get_trace_end()
+
+    @staticmethod
+    def _response_time_summary(response_times):
+        if not response_times:
+            return {
+                "count": 0,
+                "avg": 0,
+                "p50": 0,
+                "p95": 0,
+                "p99": 0,
+                "max": 0,
+            }
+        values = np.array(response_times, dtype=float)
+        return {
+            "count": int(len(values)),
+            "avg": float(values.mean()),
+            "p50": float(np.percentile(values, 50)),
+            "p95": float(np.percentile(values, 95)),
+            "p99": float(np.percentile(values, 99)),
+            "max": float(values.max()),
+        }
+
+    def get_response_time_metrics(self):
+        summary = self._response_time_summary(self.response_times)
+        metrics = {
+            "response_time_count": summary["count"],
+            "response_time_avg": summary["avg"],
+            "response_time_p50": summary["p50"],
+            "response_time_p95": summary["p95"],
+            "response_time_p99": summary["p99"],
+            "response_time_max": summary["max"],
+        }
+        for request_type in ("warm", "cold", "queued"):
+            type_summary = self._response_time_summary(
+                self.response_times_by_type.get(request_type, [])
+            )
+            metrics[f"response_time_{request_type}_count"] = type_summary["count"]
+            metrics[f"response_time_{request_type}_avg"] = type_summary["avg"]
+        return metrics
 
     def get_index_after_time(self, t):
         """Get the first historical array index that is after the time t."""
@@ -615,7 +677,8 @@ class ServerlessSimulator:
             "inst_idle_count_avg": self.get_average_server_idle_count(),
             "inst_init_free_count_avg": self.get_average_server_init_free_count(),
             "inst_init_reserved_count_avg": self.get_average_server_init_reserved_count(),
-            "inst_queued_jobs_count_avg": self.get_average_server_queued_jobs_count()
+            "inst_queued_jobs_count_avg": self.get_average_server_queued_jobs_count(),
+            **self.get_response_time_metrics(),
         }
 
     def print_trace_results(self):
@@ -633,6 +696,9 @@ class ServerlessSimulator:
         print(f"Average Init Free Count:  \t {self.get_average_server_init_free_count():.4f}")
         print(f"Average Init Reserved Count:  \t {self.get_average_server_init_reserved_count():.4f}")
         print(f"Average Queued Jobs Count:  \t {self.get_average_server_queued_jobs_count():.4f}")
+        rt = self.get_response_time_metrics()
+        print(f"Average Response Time:  \t {rt['response_time_avg']:.4f}")
+        print(f"P95 Response Time:  \t\t {rt['response_time_p95']:.4f}")
 
     def trace_condition(self, t):
         return self.autoscaler.running_condition()
@@ -759,6 +825,7 @@ class ServerlessSimulator:
                 elif new_state == FunctionState.IDLE_ON:
                     self.total_finished += 1
                     if old_state == FunctionState.BUSY:
+                        self.record_completed_request(self.servers[idx], t)
                         self.running_count -= 1
                     elif old_state == FunctionState.INIT_FREE and not self.servers[idx].is_reserved():
                         self.init_free_count -= 1
@@ -826,6 +893,8 @@ class GraphServerlessSimulator:
         self.t = 0
         self.job_rejected = False
         self.internal_arrivals = deque()
+        self.workflow_response_times = []
+        self.completed_workflows_log = []
         self.routing_rng = np.random.default_rng(seed + 1000003)
 
         ss = SeedSequence(seed + 2000003)
@@ -933,7 +1002,7 @@ class GraphServerlessSimulator:
             sim.job_rejected = False
         self.job_rejected = False
 
-    def _dispatch_arrival(self, node_name, t, external=False):
+    def _dispatch_arrival(self, node_name, t, external=False, workflow_start_time=None):
         sim = self.node_sims[node_name]
         theta_step = sim.autoscaler.get_theta_step()
         theta_stock = theta_step[0]
@@ -943,13 +1012,16 @@ class GraphServerlessSimulator:
         sim.total_requests_log.append(t)
         if external:
             self.total_external_arrivals += 1
+            workflow_start_time = t
+        elif workflow_start_time is None:
+            workflow_start_time = t
 
         if sim.is_warm_available(t):
-            sim.warm_start_arrival(t, theta_stock, theta_idle)
+            sim.warm_start_arrival(t, theta_stock, theta_idle, workflow_start_time)
         elif sim.is_init_free_available(t):
-            sim.init_free_arrival(t, theta_stock)
+            sim.init_free_arrival(t, theta_stock, workflow_start_time)
         else:
-            sim.cold_start_arrival(t, theta_stock=theta_stock)
+            sim.cold_start_arrival(t, theta_stock=theta_stock, workflow_start_time=workflow_start_time)
 
         if sim.job_rejected:
             self.job_rejected = True
@@ -971,11 +1043,21 @@ class GraphServerlessSimulator:
                 best_dt = dt
         return best_node, best_idx, best_dt
 
-    def _route_downstream(self, node_name, t):
+    def _record_completed_workflow(self, workflow_start_time, completion_time):
+        response_time = completion_time - workflow_start_time
+        self.workflow_response_times.append(response_time)
+        self.completed_workflows_log.append({
+            "arrival_time": workflow_start_time,
+            "completion_time": completion_time,
+            "response_time": response_time,
+        })
+
+    def _route_downstream(self, node_name, t, workflow_start_time):
         idx = self.node_order.index(node_name)
         probs = self.transition_matrix[idx]
         total_prob = probs.sum()
         if total_prob <= 0:
+            self._record_completed_workflow(workflow_start_time, t)
             return
         if total_prob > 1 + 1e-9:
             raise ValueError(f"Outgoing probabilities for node {node_name} sum to {total_prob}, expected <= 1")
@@ -985,9 +1067,10 @@ class GraphServerlessSimulator:
         for next_idx, prob in enumerate(probs):
             cumulative += prob
             if draw <= cumulative:
-                self.internal_arrivals.append((t, self.node_order[next_idx]))
+                self.internal_arrivals.append((t, self.node_order[next_idx], workflow_start_time))
                 self.total_internal_arrivals += 1
                 return
+        self._record_completed_workflow(workflow_start_time, t)
 
     def _process_server_transition(self, node_name, idx, t):
         sim = self.node_sims[node_name]
@@ -1005,6 +1088,7 @@ class GraphServerlessSimulator:
         elif new_state == FunctionState.IDLE_ON:
             if old_state == FunctionState.BUSY:
                 sim.total_finished += 1
+                response = sim.record_completed_request(sim.servers[idx], t)
                 sim.running_count -= 1
                 completed_request = True
             elif old_state == FunctionState.INIT_FREE and not sim.servers[idx].is_reserved():
@@ -1033,7 +1117,7 @@ class GraphServerlessSimulator:
             raise Exception(f"Unknown transition to state: {new_state}")
 
         if completed_request:
-            self._route_downstream(node_name, t)
+            self._route_downstream(node_name, t, response["workflow_start_time"])
 
     def generate_trace(self, progress=False):
         self.total_external_arrivals = 0
@@ -1061,13 +1145,15 @@ class GraphServerlessSimulator:
             state_before_event = self._global_state()
 
             if self.internal_arrivals and self.internal_arrivals[0][0] <= t:
-                arrival_t, node_name = self.internal_arrivals.popleft()
+                arrival_t, node_name, workflow_start_time = self.internal_arrivals.popleft()
                 self.graph_cost_time_integral += self.node_sims[self.root_node].autoscaler.compute_cost(
                     state_before_event
                 ) * max(0, arrival_t - t)
                 t = arrival_t
                 self.t = t
-                self._dispatch_arrival(node_name, t, external=False)
+                self._dispatch_arrival(
+                    node_name, t, external=False, workflow_start_time=workflow_start_time
+                )
                 self._advance_all_autoscalers()
                 continue
 
@@ -1148,6 +1234,8 @@ class GraphServerlessSimulator:
     def get_result_dict(self):
         per_node = {node_name: sim.get_result_dict() for node_name, sim in self.node_sims.items()}
         root_costs = self.node_sims[self.root_node].autoscaler.all_costs
+        graph_rt = ServerlessSimulator._response_time_summary(self.workflow_response_times)
+        print("number of root_costs:", len(root_costs))
         return _aggregate_graph_results(per_node, self.node_order) | {
             'external_arrivals': self.total_external_arrivals,
             'internal_arrivals': self.total_internal_arrivals,
@@ -1156,6 +1244,12 @@ class GraphServerlessSimulator:
             'graph_time_avg_cost': (
                 float(self.graph_cost_time_integral / self.t) if self.t > 0 else 0
             ),
+            'graph_response_time_count': graph_rt['count'],
+            'graph_response_time_avg': graph_rt['avg'],
+            'graph_response_time_p50': graph_rt['p50'],
+            'graph_response_time_p95': graph_rt['p95'],
+            'graph_response_time_p99': graph_rt['p99'],
+            'graph_response_time_max': graph_rt['max'],
             'simulated_time': self.get_trace_end(),
         }
 
@@ -1360,6 +1454,8 @@ def run_graph_experiment(config, node_order, transition_matrix, seed, run_idx,
     print(f"Graph requests: {results['graph_reqs_total']}")
     print(f"Graph average cost: {results['graph_cost_avg']:.4f}")
     print(f"Graph time-average cost: {results['graph_time_avg_cost']:.4f}")
+    print(f"Graph average response time: {results['graph_response_time_avg']:.4f}")
+    print(f"Graph p95 response time: {results['graph_response_time_p95']:.4f}")
     print(f"Graph cold-start probability: {results['graph_prob_cold']:.4f}")
     print(f"Graph rejection probability: {results['graph_prob_reject']:.4f}")
     print(f"Execution Time: {wall_clock_time:.2f}s ({wall_clock_time / 60:.2f}min)")
@@ -1602,6 +1698,36 @@ def _build_graph_metrics_rows(results, config, node_order):
         'internal_arrivals': results['internal_arrivals'],
         'graph_event_avg_cost': results['graph_cost_avg'],
         'graph_time_avg_cost': results['graph_time_avg_cost'],
+        'response_time_count': results['graph_response_time_count'],
+        'response_time_avg': results['graph_response_time_avg'],
+        'response_time_p50': results['graph_response_time_p50'],
+        'response_time_p95': results['graph_response_time_p95'],
+        'response_time_p99': results['graph_response_time_p99'],
+        'response_time_max': results['graph_response_time_max'],
+        'response_time_warm_count': _sum_node_metric(per_node, node_order, 'response_time_warm_count'),
+        'response_time_warm_avg': (
+            sum(
+                per_node[node]['response_time_warm_avg'] * per_node[node]['response_time_warm_count']
+                for node in node_order
+            ) / _sum_node_metric(per_node, node_order, 'response_time_warm_count')
+            if _sum_node_metric(per_node, node_order, 'response_time_warm_count') > 0 else 0
+        ),
+        'response_time_cold_count': _sum_node_metric(per_node, node_order, 'response_time_cold_count'),
+        'response_time_cold_avg': (
+            sum(
+                per_node[node]['response_time_cold_avg'] * per_node[node]['response_time_cold_count']
+                for node in node_order
+            ) / _sum_node_metric(per_node, node_order, 'response_time_cold_count')
+            if _sum_node_metric(per_node, node_order, 'response_time_cold_count') > 0 else 0
+        ),
+        'response_time_queued_count': _sum_node_metric(per_node, node_order, 'response_time_queued_count'),
+        'response_time_queued_avg': (
+            sum(
+                per_node[node]['response_time_queued_avg'] * per_node[node]['response_time_queued_count']
+                for node in node_order
+            ) / _sum_node_metric(per_node, node_order, 'response_time_queued_count')
+            if _sum_node_metric(per_node, node_order, 'response_time_queued_count') > 0 else 0
+        ),
         'simulated_time': results['simulated_time'],
         'warm_service_rate': graph_warm_rate,
         'warm_service_mean_time': _rate_to_mean_time(graph_warm_rate),
@@ -1653,6 +1779,18 @@ def _build_graph_metrics_rows(results, config, node_order):
             'internal_arrivals': '',
             'graph_event_avg_cost': '',
             'graph_time_avg_cost': '',
+            'response_time_count': node_result['response_time_count'],
+            'response_time_avg': node_result['response_time_avg'],
+            'response_time_p50': node_result['response_time_p50'],
+            'response_time_p95': node_result['response_time_p95'],
+            'response_time_p99': node_result['response_time_p99'],
+            'response_time_max': node_result['response_time_max'],
+            'response_time_warm_count': node_result['response_time_warm_count'],
+            'response_time_warm_avg': node_result['response_time_warm_avg'],
+            'response_time_cold_count': node_result['response_time_cold_count'],
+            'response_time_cold_avg': node_result['response_time_cold_avg'],
+            'response_time_queued_count': node_result['response_time_queued_count'],
+            'response_time_queued_avg': node_result['response_time_queued_avg'],
             'simulated_time': results['simulated_time'],
             'total_expected_warm_service_time': '',
             'total_expected_cold_service_time': '',

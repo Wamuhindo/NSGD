@@ -1,8 +1,0 @@
-{
-  "DirectedAcyclicGraph": {
-    "A1": {
-      "next": [],
-      "transition_probability": []
-    }
-  }
-}

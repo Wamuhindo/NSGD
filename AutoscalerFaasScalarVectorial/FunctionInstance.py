@@ -23,6 +23,9 @@ class FunctionInstance:
     self.finished_at = None
     self.state = FunctionState.COLD
     self.reserved = False
+    self.active_request_arrival_time = None
+    self.active_request_type = None
+    self.active_workflow_start_time = None
     FunctionInstance.id_counter += 1
 
     self.generate_init_departure(t)
@@ -61,6 +64,29 @@ class FunctionInstance:
 
   def unreserve(self):
     self.reserved = False
+
+  def start_request(self, arrival_time, request_type, workflow_start_time=None):
+    self.active_request_arrival_time = arrival_time
+    self.active_request_type = request_type
+    self.active_workflow_start_time = (
+      arrival_time if workflow_start_time is None else workflow_start_time
+    )
+
+  def complete_request(self, completion_time):
+    if self.active_request_arrival_time is None:
+      return None
+    response = {
+      "arrival_time": self.active_request_arrival_time,
+      "completion_time": completion_time,
+      "response_time": completion_time - self.active_request_arrival_time,
+      "request_type": self.active_request_type,
+      "workflow_start_time": self.active_workflow_start_time,
+    }
+    self.active_request_arrival_time = None
+    self.active_request_type = None
+    self.active_workflow_start_time = None
+    self.finished_at = completion_time
+    return response
 
   def init_resource_usages(self,cpu_warm=(50,150,),cpu_cold=(200,500,),cpu_idle=(5,10,),mem_warm=(150,256,),mem_cold=(200,256,),mem_idle=(100,200,),gpu_warm=(0,0,),gpu_cold=(0,0,),gpu_idle=(0,0,), gpu_warm_mem=(0,0,),gpu_cold_mem=(0,0,),gpu_idle_mem=(0,0,)):
     self.cpu_warm = cpu_warm

@@ -1,0 +1,126 @@
+{
+  "base_config": {
+    "description": "Sanity-check sweep from JSON config",
+    "experiment_name": "sanitycheck_sweep_json",
+    "arrival_rate": 10,
+    "optimization": {
+      "type": "sgd"
+    },
+    "theta": [
+      [
+        0.3333333333333333,
+        0.3333333333333333,
+        30
+      ]
+    ],
+    "tau": 100,
+    "max_concurrency": 50,
+    "max_time": 100000,
+    "K": 2,
+    "seeds": [
+      1
+    ],
+    "k_delta": 1,
+    "k_gamma": [
+      1,
+      1,
+      1
+    ],
+    "k_gamma_per_theta": null,
+    "prtb": [
+      [
+        -0.5,
+        0.5
+      ],
+      [
+        -0.5,
+        0.5
+      ],
+      [
+        -1,
+        1
+      ]
+    ],
+    "learn_mask": [
+      true,
+      true,
+      true
+    ],
+    "accumulate_cost": true,
+    "K_exp": 1000,
+    "gamma_min": 1,
+    "theta_stock_min": 0,
+    "theta_idle_min": 0,
+    "stop_by_simulated_time": false,
+    "max_simulated_time": 500,
+    "exp_per_run": 1
+  },
+  "node_defaults": {
+    "warm_service": {
+      "rate": 0.5,
+      "type": "Exponential"
+    },
+    "cold_service": {
+      "rate": 100.0,
+      "type": "Exponential"
+    },
+    "cold_start": {
+      "rate": 0.1,
+      "type": "Exponential"
+    },
+    "expiration": {
+      "rate": 0.01,
+      "type": "Exponential"
+    },
+    "scale_node_rates_by_N": true
+  },
+  "sweeps": {
+    "N_values": [
+      1,
+      5
+    ],
+    "arrival_rate_values": [
+      5,
+      10,
+      20
+    ],
+    "warm_service_values": [
+      0.5,
+      0.3
+    ],
+    "optimization_values": [
+      "adam", "RMSProp"
+    ],
+    "learn_mask_values": [
+      [
+        true,
+        true,
+        true
+      ],
+      [
+        false,
+        false,
+        false
+      ]
+    ],
+    "k_gamma_values": [
+      [
+        1,
+        1,
+        1
+      ]
+    ],
+    "max_concurrency_values ": [
+      50, 5000000
+    ]
+  },
+  "z_metrics": [
+    "response_time",
+    "rejection_probability",
+    "average_cost"
+  ],
+  "plot_by_parameters": [
+    "arrival_rate",
+    "warm_service", "max_concurrency", "optimization" 
+  ]
+}

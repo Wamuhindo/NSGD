@@ -294,7 +294,8 @@ class VectorialAutoScalingAlgorithm:
 
         # --- Compute sequences for current outer iteration n ---
         # gamma_n: per-component step size (k_gamma_j / n)
-        gamma_n = self.k_gamma / self.n
+        #gamma_n = self.k_gamma / self.n
+        gamma_n = self.k_gamma 
         # delta_n: perturbation magnitude (k_delta / n^(2/3))
         delta_n = self.k_delta / (self.n ** (2.0 / 3.0))
         # tau_n: mixing time for this iteration (tau * ln(n+1))
@@ -426,32 +427,41 @@ class VectorialAutoScalingAlgorithm:
                 learned = self.learn_mask
                 grad[learned] = (cost_plus_vec[learned] - cost_minus_vec[learned]) / \
                                 (2.0 * self.perturbations[learned])
+                print("Gradient estimate:", grad)
 
                 # --- Apply optimizer ---
+                #
                 if simulator.optimization == "adam":
+                    print("Using Adam update")
                     # Adam: adaptive learning rate with bias correction
                     self.m = self.beta1 * self.m + (1 - self.beta1) * grad
                     self.v_adam = self.beta2 * self.v_adam + (1 - self.beta2) * (grad ** 2)
                     m_hat = self.m / (1 - self.beta1 ** self.n)
                     v_hat = self.v_adam / (1 - self.beta2 ** self.n)
                     opt = self.theta - gamma_n * m_hat / (np.sqrt(v_hat) + self.epsilon)
+                    
 
                 elif simulator.optimization == "RMSProp":
+                    print("Using RMSProp update")
                     # RMSProp: running average of squared gradients
                     self.grad_avg_sq = self.beta_rms * self.grad_avg_sq + \
                                        (1 - self.beta_rms) * grad ** 2
                     opt = self.theta - gamma_n * grad / (np.sqrt(self.grad_avg_sq) + self.epsilon)
 
                 else:
+                    print("Using vanilla SGD update")
                     # SGD (vanilla, as in paper eq. 2)
                     opt = self.theta - gamma_n * grad
 
                 # --- Clip parameters to valid ranges ---
                 # theta_stock/theta_idle bounds default to [1, N] but can be relaxed for tests.
+                print("Before clipping:", opt)
+                print(opt)
                 theta_stock_opt = min(max(opt[0], self.theta_stock_min), self.N)
                 theta_idle_opt = min(max(opt[1], self.theta_idle_min), self.N)
                 theta_exp_opt = max(opt[2], self.gamma_min)
                 new_theta = np.array([theta_stock_opt, theta_idle_opt, theta_exp_opt])
+                print("After clipping:", np.array([theta_stock_opt, theta_idle_opt, theta_exp_opt]))
 
                 # Keep fixed dimensions at their initial values
                 new_theta[~self.learn_mask] = self.theta_init[~self.learn_mask]
